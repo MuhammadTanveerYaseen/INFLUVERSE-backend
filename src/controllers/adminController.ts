@@ -69,9 +69,14 @@ export const getPendingVerifications = async (req: Request, res: Response) => {
 // @access  Private (Admin)
 export const verifyCreator = async (req: Request, res: Response) => {
     const { status, reason } = req.body; // 'approved' or 'rejected'
-    const profileId = req.params.id as string;
+    const id = req.params.id as string;
 
-    const profile = await CreatorProfile.findById(profileId);
+    let profile = await CreatorProfile.findById(id);
+    if (!profile) {
+        // Frontend often sends User ID, so we fallback to finding profile by user field
+        profile = await CreatorProfile.findOne({ user: id });
+    }
+
     if (!profile) {
         res.status(404);
         throw new Error('Creator Profile not found');
@@ -85,9 +90,9 @@ export const verifyCreator = async (req: Request, res: Response) => {
 
     if (status === 'approved') {
         creatorUser.status = 'active';
-        creatorUser.isVerified = true;
+        creatorUser.isVerified = true; // Assigned default verified tick upon approval
         creatorUser.rejectionReason = undefined;
-        profile.verified = true;
+        profile.verified = true; // Sync profile verification
     } else if (status === 'rejected') {
         creatorUser.status = 'rejected';
         creatorUser.isVerified = false;
@@ -99,6 +104,34 @@ export const verifyCreator = async (req: Request, res: Response) => {
     const updatedProfile = await profile.save();
 
     res.json({ message: `Creator profile ${status}`, profile: updatedProfile });
+};
+
+// @desc    Toggle User Verification (Verified Tick / Blue Tick)
+// @route   PATCH /api/admin/users/:id/verify
+// @access  Private (Admin)
+export const toggleUserVerification = async (req: Request, res: Response) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            res.status(404);
+            throw new Error('User not found');
+        }
+
+        user.isVerified = !user.isVerified;
+        await user.save();
+
+        // If creator, also update profile for consistency
+        if (user.role === 'creator') {
+            await CreatorProfile.findOneAndUpdate(
+                { user: user._id },
+                { verified: user.isVerified }
+            );
+        }
+
+        res.json({ message: `User verification set to ${user.isVerified}`, isVerified: user.isVerified });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
 };
 
 // @desc    Get All Orders

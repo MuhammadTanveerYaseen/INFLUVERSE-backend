@@ -9,6 +9,10 @@ export class OrderService {
         const feePercentage = settings?.platformFeePercentage || 15; // Default 15%
 
         const offerPrice = Number(offer.price);
+        if (isNaN(offerPrice) || offerPrice <= 0) {
+            throw new Error(`Invalid offer price: ${offer.price}`);
+        }
+
         // Calculate Platform Fee with precision
         const platformFee = Number((offerPrice * (feePercentage / 100)).toFixed(2));
         const totalAmount = Number((offerPrice + platformFee).toFixed(2));
@@ -20,8 +24,9 @@ export class OrderService {
             price: offerPrice,
             platformFee,
             totalAmount,
-            status: 'active',
+            status: 'pending_payment',
             paid: false,
+            packageDetails: offer.packageDetails
         });
 
         return order;

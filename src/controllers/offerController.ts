@@ -4,37 +4,51 @@ import { OfferService } from '../services/offer.service';
 import { ChatService } from '../services/chat.service';
 import { OrderService } from '../services/order.service';
 import { NotificationService } from '../services/notification.service';
+import mongoose from 'mongoose';
 
 export const createOffer = async (req: Request | any, res: Response) => {
     try {
-        const { creatorId, price, deliverables, deadline, usageRights, chatId } = req.body;
-        const brandId = (req.user._id || req.user.id).toString();
+        const { creatorId, targetId, price, deliverables, deadline, usageRights, chatId } = req.body;
+        const senderId = (req.user._id || req.user.id).toString();
+        const role = req.user.role;
 
-        let targetCreatorId = creatorId;
+        let finalTargetId = targetId || creatorId;
 
-        if (!targetCreatorId && chatId) {
+        if (!finalTargetId && chatId) {
             const existingChat = await ChatService.getChatById(chatId);
             if (existingChat) {
-                // Find the participant that is NOT the sender (brand)
+                // Find the participant that is NOT the sender
                 const otherParticipant = existingChat.participants.find((p: any) => {
                     const savedId = p._id || p;
-                    return savedId.toString() !== brandId;
+                    return savedId.toString() !== senderId;
                 });
 
                 if (otherParticipant) {
                     const participantId = (otherParticipant as any)._id || otherParticipant;
-                    targetCreatorId = participantId.toString();
+                    finalTargetId = participantId.toString();
                 }
             }
         }
 
-        if (!targetCreatorId) {
-            return res.status(400).json({ message: "Creator ID is required. Could not infer from chat." });
+        if (!finalTargetId) {
+            return res.status(400).json({ message: "Target user ID is required. Could not infer from chat." });
         }
 
-        if (targetCreatorId === brandId) return res.status(400).json({ message: "You cannot make an offer to yourself" });
+        if (finalTargetId === senderId) return res.status(400).json({ message: "You cannot make an offer to yourself" });
 
-        const creatorUser = await User.findById(targetCreatorId);
+        const targetUser = await User.findById(finalTargetId);
+        if (!targetUser) {
+            return res.status(404).json({ message: "Target user not found" });
+        }
+
+        let brandId, creatorIdLocal;
+        if (role === 'brand') {
+            brandId = senderId;
+            creatorIdLocal = finalTargetId;
+        } else {
+            creatorIdLocal = senderId;
+            brandId = finalTargetId;
+        }
 
         // 1. Find or Create Chat
         let chat;
@@ -43,7 +57,7 @@ export const createOffer = async (req: Request | any, res: Response) => {
         }
 
         if (!chat) {
-            chat = await ChatService.findOrCreateNegotiationChat([brandId, targetCreatorId]);
+            chat = await ChatService.findOrCreateNegotiationChat([brandId, creatorIdLocal]);
         }
 
         // 2. Create Offer
@@ -61,7 +75,8 @@ export const createOffer = async (req: Request | any, res: Response) => {
 
         const offer = await OfferService.createOffer({
             brand: brandId,
-            creator: targetCreatorId,
+            creator: creatorIdLocal,
+            sender: senderId,
             price: Number(price),
             deliverables,
             deadline,
@@ -73,24 +88,26 @@ export const createOffer = async (req: Request | any, res: Response) => {
         // 3. Create System Message for Offer
         await ChatService.addSystemMessage(
             chat._id,
-            brandId,
+            senderId,
             "Offer Created",
             offer._id
         );
 
-        const brandUser = req.user;
+        const senderUser = req.user;
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        
+        const targetDashboardUrl = targetUser.role === 'brand' 
+            ? `${frontendUrl}/dashboard/brand/offers` 
+            : `${frontendUrl}/dashboard/creator/offers`;
 
-        if (creatorUser) {
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            await NotificationService.sendOfferReceived(
-                creatorUser.id,
-                creatorUser.email,
-                brandId,
-                brandUser.username,
-                Number(price),
-                `${frontendUrl}/dashboard/creator/offers`
-            );
-        }
+        await NotificationService.sendOfferReceived(
+            targetUser.id,
+            targetUser.email,
+            senderId,
+            senderUser.username,
+            Number(price),
+            targetDashboardUrl
+        );
 
         res.status(201).json(offer);
     } catch (error: any) {
@@ -121,9 +138,13 @@ export const respondToOffer = async (req: Request | any, res: Response) => {
             return res.status(404).json({ message: 'Offer not found' });
         }
 
+        const recipientId = offer.sender 
+            ? (offer.sender.toString() === offer.brand.toString() ? offer.creator : offer.brand) 
+            : offer.creator;
+
         // Authorization Check
-        if (offer.creator.toString() !== userId) {
-            console.warn(`[OfferController] Unauthorized response attempt. User ${userId} tried to respond to offer intended for Creator ${offer.creator}`);
+        if (recipientId.toString() !== userId) {
+            console.warn(`[OfferController] Unauthorized response attempt. User ${userId} tried to respond to offer intended for ${recipientId}`);
             return res.status(403).json({ message: 'Not authorized' });
         }
 
@@ -132,47 +153,68 @@ export const respondToOffer = async (req: Request | any, res: Response) => {
             status === 'countered' ? { price: Number(counterPrice), message: counterMessage } : undefined
         );
 
+        const originalSenderId = offer.sender ? offer.sender.toString() : offer.brand.toString();
+        const originalSenderUser = await User.findById(originalSenderId);
+        const responderUser = req.user;
+
         // Use the updated status for logic
         if (status === 'accepted') {
-            const order = await OrderService.createFromOffer(updatedOffer);
+            // Check if order already exists to prevent duplicates and handle manual repairs
+            const Order = mongoose.model('Order');
+            const existingOrder = await Order.findOne({ offer: updatedOffer._id });
+            
+            let order;
+            if (existingOrder) {
+                console.log(`[OfferController] Offer ${req.params.id} already has an order: ${existingOrder._id}`);
+                order = existingOrder;
+            } else {
+                console.log(`[OfferController] Offer ${req.params.id} accepted. Creating order...`);
+                order = await OrderService.createFromOffer(updatedOffer);
+                console.log(`[OfferController] Order created: ${order._id}`);
+            }
+            
+            // Link the created order to the offer
+            updatedOffer.order = order._id as any;
+            await updatedOffer.save();
 
-            // Notify Brand of Order Creation
-            const brandUser = await User.findById(updatedOffer.brand);
-            const creatorUser = req.user;
-
-            if (brandUser) {
+            if (originalSenderUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                const dashboardRole = originalSenderUser.role === 'brand' ? 'brand' : 'creator';
+                
                 await NotificationService.sendOfferStatusUpdate(
-                    brandUser.id,
-                    brandUser.email,
+                    originalSenderUser.id,
+                    originalSenderUser.email,
                     userId,
-                    creatorUser.username,
+                    responderUser.username,
                     'accepted',
                     `${frontendUrl}/dashboard/brand/orders`
                 );
-                await NotificationService.sendOrderCreated(
-                    brandUser.id,
-                    brandUser.email,
-                    order._id.toString(),
-                    'brand',
-                    `${frontendUrl}/dashboard/brand/orders/${order._id}`
-                );
+
+                // Add a specific payment notification for brands
+                if (originalSenderUser.role === 'brand') {
+                    await NotificationService.sendPaymentRequired(
+                        originalSenderUser.id,
+                        originalSenderUser.email,
+                        order._id.toString(),
+                        `${frontendUrl}/dashboard/brand/checkout/${order._id}`
+                    );
+                }
             }
 
             return res.json({ message: 'Offer accepted, Order created', orderId: order._id });
         } else {
-            // Notify Brand of Rejection/Counter
-            const brandUser = await User.findById(offer.brand);
-            const creatorUser = req.user;
-            if (brandUser) {
+            // Notify original sender of Rejection/Counter
+            if (originalSenderUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                const dashboardRole = originalSenderUser.role === 'brand' ? 'brand' : 'creator';
+                
                 await NotificationService.sendOfferStatusUpdate(
-                    brandUser.id,
-                    brandUser.email,
+                    originalSenderUser.id,
+                    originalSenderUser.email,
                     userId,
-                    creatorUser.username,
+                    responderUser.username,
                     status,
-                    `${frontendUrl}/dashboard/brand/offers`
+                    `${frontendUrl}/dashboard/${dashboardRole}/offers`
                 );
             }
         }

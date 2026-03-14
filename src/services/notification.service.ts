@@ -166,4 +166,43 @@ export class NotificationService {
             emailTemplates.orderCancelled(orderId, reason, link)
         );
     }
+
+    static async sendPaymentRequired(recipientId: string, email: string, orderId: string, link: string) {
+        // DB Notification
+        await this.createNotification(
+            recipientId,
+            'Payment Required',
+            `Creator accepted! Please complete payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} to start the campaign.`,
+            'payment',
+            link
+        );
+
+        // Email
+        await sendEmail(
+            email,
+            'Action Required: Complete your Influverse Payment',
+            `The creator has accepted your offer! To officially start the campaign and secure the timeframe, please complete the payment at: ${link}`
+        );
+    }
+
+    static async sendPaymentConfirmed(recipientId: string, email: string, orderId: string, link: string, isBrand: boolean = false) {
+        const title = 'Payment Secured';
+        const message = isBrand 
+            ? `Your payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} is successful. The creator has been notified.`
+            : `Payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} has been secured in escrow. You can now start the campaign!`;
+
+        await this.createNotification(
+            recipientId,
+            title,
+            message,
+            'payment',
+            link
+        );
+
+        await sendEmail(
+            email,
+            'Payment Confirmed - Order Active ✅',
+            message + ` View details: ${link}`
+        );
+    }
 }

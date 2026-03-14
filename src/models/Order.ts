@@ -7,7 +7,7 @@ export interface IOrder extends Document {
     price: number;
     platformFee: number;
     totalAmount: number;
-    status: 'active' | 'delivered' | 'revision' | 'approved' | 'disputed' | 'cancelled';
+    status: 'pending_payment' | 'active' | 'delivered' | 'revision' | 'approved' | 'disputed' | 'cancelled';
     deliverables: {
         files: string[]; // URLs
         notes?: string;
@@ -45,8 +45,8 @@ const orderSchema: Schema = new Schema({
     totalAmount: { type: Number, required: true },
     status: {
         type: String,
-        enum: ['active', 'delivered', 'revision', 'approved', 'disputed', 'cancelled'],
-        default: 'active'
+        enum: ['pending_payment', 'active', 'delivered', 'revision', 'approved', 'disputed', 'cancelled'],
+        default: 'pending_payment'
     },
     deliverables: [{
         files: [String],

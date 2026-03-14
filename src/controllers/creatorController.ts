@@ -160,10 +160,12 @@ export const getCreators = async (req: Request, res: Response) => {
             query.country = new RegExp(country as string, 'i');
         }
 
-        const creatorsList = await CreatorProfile.find(query).populate('user', 'username email isVerified');
+        const creatorsList = await CreatorProfile.find(query).populate('user', 'username email status isVerified');
 
-        // Filter out orphans
-        const validCreators = creatorsList.filter(c => c.user);
+        // Filter out orphans and unapproved creators
+        const validCreators = creatorsList.filter(c => 
+            c.user && (c.user as any).status === 'active'
+        );
 
         res.json(validCreators);
     } catch (error: any) {
@@ -192,10 +194,10 @@ export const getCreatorById = async (req: Request, res: Response) => {
             }
         }
 
-        if (profile) {
+        if (profile && (profile.user as any).status === 'active') {
             res.json(profile);
         } else {
-            res.status(404).json({ message: 'Creator profile not found' });
+            res.status(404).json({ message: 'Creator profile not found or pending approval' });
         }
     } catch (error: any) {
         res.status(500).json({ message: error.message });

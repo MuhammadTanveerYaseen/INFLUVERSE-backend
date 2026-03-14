@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IOffer extends Document {
     brand: mongoose.Types.ObjectId;
     creator: mongoose.Types.ObjectId;
+    sender?: mongoose.Types.ObjectId; // Who initiated the offer
     price: number;
     deliverables: string; // description of work
     deadline: Date;
@@ -14,6 +15,9 @@ export interface IOffer extends Document {
         message: string;
     };
     chat?: mongoose.Types.ObjectId; // Link to the chat where this offer occurred
+    order?: mongoose.Types.ObjectId; // Link to the created order
+    paid?: boolean; // Track payment status on offer
+    packageDetails?: any;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -28,6 +32,10 @@ const offerSchema: Schema = new Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
+    },
+    sender: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
     },
     price: { type: Number, required: true },
     deliverables: { type: String, required: true },
@@ -46,7 +54,13 @@ const offerSchema: Schema = new Schema({
     chat: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Chat'
-    }
+    },
+    order: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Order'
+    },
+    paid: { type: Boolean, default: false },
+    packageDetails: { type: Schema.Types.Mixed }
 }, {
     timestamps: true
 });

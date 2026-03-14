@@ -57,7 +57,7 @@ export class PaymentService {
 
         const paymentIntent = await stripe.paymentIntents.create({
             amount: amountInCents,
-            currency: 'usd',
+            currency: 'eur',
             metadata: { orderId },
             automatic_payment_methods: {
                 enabled: true,
@@ -76,7 +76,7 @@ export class PaymentService {
 
         const transfer = await stripe.transfers.create({
             amount: Math.round(amount * 100),
-            currency: 'usd',
+            currency: 'eur',
             destination: profile.stripeConnectId,
             description: 'Payout from Influverse',
         });

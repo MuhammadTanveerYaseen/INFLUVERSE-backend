@@ -3,6 +3,7 @@ import User from '../models/User';
 import BrandProfile from '../models/BrandProfile';
 import Order from '../models/Order';
 import Offer from '../models/Offer';
+import CreatorProfile from '../models/CreatorProfile';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -268,3 +269,87 @@ export const getBrandDashboardStats = async (req: Request | any, res: Response) 
         res.status(500).json({ message: "Failed to fetch dashboard stats" });
     }
 };
+
+// @desc    Toggle favorite on a creator
+// @route   POST /api/brands/favorites/:creatorId
+// @access  Private (Brand)
+export const toggleFavoriteCreator = async (req: Request | any, res: Response) => {
+    try {
+        const brandId = req.user._id || req.user.id;
+        const creatorId = req.params.creatorId;
+
+        console.log(`[ToggleFavorite] brandId: ${brandId}, creatorId: ${creatorId}`);
+
+        let profile = await BrandProfile.findOne({ user: brandId });
+        if (!profile) {
+            profile = await BrandProfile.create({
+                user: brandId,
+                companyName: req.user.username || 'My Company',
+                savedCreators: []
+            });
+        }
+
+        if (!profile.savedCreators) {
+            profile.savedCreators = [];
+        }
+
+        const creatorIdObj = new mongoose.Types.ObjectId(creatorId);
+        const creatorIndex = profile.savedCreators.findIndex(id => id && id.toString() === creatorId);
+        let isFavorited = false;
+
+        if (creatorIndex !== -1) {
+            // Remove from favorites
+            profile.savedCreators.splice(creatorIndex, 1);
+            isFavorited = false;
+        } else {
+            // Add to favorites
+            profile.savedCreators.push(creatorIdObj);
+            isFavorited = true;
+        }
+
+        // Mark as modified if Mongoose doesn't detect it automatically (though it usually does for arrays)
+        profile.markModified('savedCreators');
+        await profile.save();
+
+        res.json({ message: isFavorited ? 'Creator favorited' : 'Creator unfavorited', isFavorited, savedCreators: profile.savedCreators });
+    } catch (error: any) {
+        console.error("Favorite Creator Error:", error);
+        res.status(500).json({ message: "Failed to toggle favorite creator" });
+    }
+};
+
+// @desc    Get favorite creators
+// @route   GET /api/brands/favorites
+// @access  Private (Brand)
+export const getFavoriteCreators = async (req: Request | any, res: Response) => {
+    try {
+        const brandId = req.user._id || req.user.id;
+        
+        const profile = await BrandProfile.findOne({ user: brandId });
+
+        if (!profile) {
+            // Instead of 404, just return empty list as they haven't saved anything and profile is lazy-created
+            return res.json([]);
+        }
+
+        const savedCreatorIds = profile.savedCreators || [];
+        
+        if (savedCreatorIds.length === 0) {
+            return res.json([]);
+        }
+        
+        // Find all their profiles, populate the user field
+        const creators = await CreatorProfile.find({
+            user: { $in: savedCreatorIds }
+        }).populate('user', 'username email isVerified status');
+
+        // Filter out any creators where populating the user failed (e.g. user was deleted)
+        const validCreators = creators.filter(c => c.user);
+
+        res.json(validCreators);
+    } catch (error: any) {
+        console.error("Get Favorite Creators Error:", error);
+        res.status(500).json({ message: "Failed to fetch favorite creators" });
+    }
+};
+

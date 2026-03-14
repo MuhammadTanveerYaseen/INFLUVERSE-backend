@@ -8,6 +8,7 @@ import Transaction from '../models/Transaction';
 import { sendEmail, emailTemplates } from '../utils/emailService';
 import { ChatService } from '../services/chat.service';
 import { NotificationService } from '../services/notification.service';
+import { OfferService } from '../services/offer.service';
 import mongoose from 'mongoose';
 
 export const getOrders = async (req: Request | any, res: Response) => {
@@ -21,6 +22,7 @@ export const getOrders = async (req: Request | any, res: Response) => {
             .populate('offer')
             .sort({ createdAt: -1 });
 
+        console.log(`[OrderController] Found ${orders.length} orders for user. IDs: ${orders.map(o => `${o._id}(paid:${o.paid})`).join(', ')}`);
         res.json(orders);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -29,27 +31,36 @@ export const getOrders = async (req: Request | any, res: Response) => {
 
 export const getOrderById = async (req: Request | any, res: Response) => {
     try {
-        const orderId = req.params.id as string;
+        const orderId = (req.params.id as string).trim();
+        console.log(`[OrderController] Fetching Order: "${orderId}"`);
+
+        if (!mongoose.Types.ObjectId.isValid(orderId)) {
+            console.error(`[OrderController] Invalid Order ID format: ${orderId}`);
+            return res.status(400).json({ message: 'Invalid Order ID format' });
+        }
+
         const order: any = await Order.findById(orderId)
             .populate('brand', 'username')
             .populate('creator', 'username')
             .populate('offer');
 
         if (!order) {
-            console.error(`[OrderController] Order not found: ${req.params.id}`);
-            return res.status(404).json({ message: 'Order not found' });
+            console.error(`[OrderController] Order NOT FOUND in DB for ID: ${orderId}`);
+            return res.status(404).json({ message: 'Order reference not found' });
         }
 
         const userId = (req.user.id || req.user._id).toString();
-        const brandId = (order.brand as any)._id.toString();
-        const creatorId = (order.creator as any)._id.toString();
+        // Handle both populated and unpopulated cases safely
+        const brandId = (order.brand._id || order.brand).toString();
+        const creatorId = (order.creator._id || order.creator).toString();
+
+        console.log(`[OrderController] Auth Check - User: ${userId}, Brand: ${brandId}, Creator: ${creatorId}`);
 
         // Security check
         if (brandId !== userId &&
             creatorId !== userId &&
             req.user.role !== 'admin') {
-            console.warn(`[OrderController] Unauthorized access attempt. User ${userId} (role: ${req.user.role}) tried to access order owned by Brand ${brandId} and Creator ${creatorId}`);
-            return res.status(403).json({ message: 'Not authorized' });
+            return res.status(403).json({ message: 'Not authorized to view this campaign protocol' });
         }
 
         const formattedOrder: any = order.toObject();
@@ -200,40 +211,70 @@ export const reviewDeliverable = async (req: Request | any, res: Response) => {
 
 export const createPackageOrder = async (req: Request | any, res: Response) => {
     try {
-        const { creatorId, packageDetails, price } = req.body;
+        let { creatorId, packageDetails, price } = req.body;
         const userId = req.user._id || req.user.id;
 
-        const settings = await PlatformSettings.findOne();
-        const feePercentage = settings?.platformFeePercentage || 15;
+        // Ensure price is available and is a number
+        if (price === undefined && packageDetails?.price !== undefined) {
+            price = packageDetails.price;
+        }
 
-        const platformFee = Number((price * (feePercentage / 100)).toFixed(2));
-        const totalAmount = Number((price + platformFee).toFixed(2));
+        const numericPrice = Number(price);
 
-        const order = await Order.create({
+        if (isNaN(numericPrice) || numericPrice <= 0) {
+            return res.status(400).json({ 
+                message: "A valid price is required to book a package.",
+                receivedPrice: price 
+            });
+        }
+
+        // 1. Find or Create Chat for Negotiation/Booking
+        const chat = await ChatService.findOrCreateNegotiationChat([(userId as any).toString(), creatorId.toString()]);
+
+        // 2. Create a PENDING Offer (instead of active order)
+        const deadline = new Date();
+        deadline.setDate(deadline.getDate() + 7); // Default 7 days if not specified
+
+        const offer = await OfferService.createOffer({
             brand: userId,
             creator: creatorId,
-            price: price,
-            platformFee,
-            totalAmount,
-            status: 'active',
-            paid: false,
-            packageDetails
+            sender: userId,
+            price: numericPrice,
+            deliverables: `Package Booking: ${packageDetails.name}\n${packageDetails.description || ''}`,
+            deadline: deadline,
+            status: 'pending',
+            packageDetails: packageDetails,
+            chat: chat._id
         });
+
+        // 3. Add system message to chat
+        await ChatService.addSystemMessage(
+            chat._id,
+            userId,
+            "Package Booking Request Sent",
+            offer._id
+        );
 
         const creatorUser = await User.findById(creatorId);
         if (creatorUser) {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            await NotificationService.sendOrderCreated(
+            await NotificationService.sendOfferReceived(
                 creatorUser.id,
                 creatorUser.email,
-                order.id,
-                'creator',
-                `${frontendUrl}/dashboard/creator/orders/${order.id}`
+                userId.toString(),
+                req.user.username,
+                numericPrice,
+                `${frontendUrl}/dashboard/creator/offers`
             );
         }
 
-        res.status(201).json(order);
+        // Return the offer so frontend can redirect to chat
+        res.status(201).json({ 
+            message: "Booking offer sent to creator",
+            offer: offer 
+        });
     } catch (error: any) {
+        console.error("[OrderController] createPackageOrder error:", error);
         res.status(500).json({ message: error.message });
     }
 };

@@ -37,7 +37,7 @@ const transactionSchema: Schema = new Schema({
     },
     currency: {
         type: String,
-        default: 'usd'
+        default: 'eur'
     },
     status: {
         type: String,

@@ -45,6 +45,7 @@ export interface ICreatorProfile extends Document {
     };
     verified: boolean;
     availability: string; // Changed from boolean available
+    isFeatured: boolean;
     phoneNumber?: string;
     stripeConnectId?: string; // For payouts
     bankDetails?: {
@@ -54,7 +55,6 @@ export interface ICreatorProfile extends Document {
         routingNumber?: string; // or swift code
         swiftCode?: string;
     };
-    introVideo?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -108,6 +108,7 @@ const creatorProfileSchema: Schema = new Schema({
         reviewCount: { type: Number, default: 0 }
     },
     verified: { type: Boolean, default: false },
+    isFeatured: { type: Boolean, default: false },
     availability: {
         type: String,
         enum: ['available', 'busy', 'offline'],
@@ -121,8 +122,7 @@ const creatorProfileSchema: Schema = new Schema({
         accountNumber: { type: String },
         routingNumber: { type: String },
         swiftCode: { type: String }
-    },
-    introVideo: { type: String }
+    }
 
 }, {
     timestamps: true

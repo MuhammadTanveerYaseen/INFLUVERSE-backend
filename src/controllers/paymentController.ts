@@ -6,6 +6,8 @@ import Transaction from '../models/Transaction';
 import CreatorProfile from '../models/CreatorProfile';
 import PlatformSettings from '../models/PlatformSettings';
 import User from '../models/User';
+import mongoose from 'mongoose';
+import { NotificationService } from '../services/notification.service';
 
 interface AuthenticatedRequest extends Request {
     user?: any;
@@ -78,24 +80,29 @@ export const PaymentController = {
     // 3. Create Payment Intent (Brand pays for Order)
     createOrderPayment: async (req: AuthenticatedRequest, res: Response) => {
         try {
-            const { orderId } = req.body;
+            const orderId = (req.body.orderId as string)?.trim();
+            console.log(`[PaymentController] Payment Intent Request for Order: "${orderId}"`);
+            
             if (!orderId) return res.status(400).json({ message: 'Order ID is required' });
+
+            if (!mongoose.Types.ObjectId.isValid(orderId)) {
+                return res.status(400).json({ message: 'Invalid Order ID signature' });
+            }
 
             const order = await Order.findById(orderId);
 
             if (!order) {
-                console.error(`[PaymentController] Order not found: ${orderId}`);
-                return res.status(404).json({ message: 'Order not found' });
+                console.error(`[PaymentController] Order NOT FOUND in DB: ${orderId}`);
+                return res.status(404).json({ message: 'Payment target order not found' });
             }
 
             const userId = (req.user.id || req.user._id).toString();
-            const orderBrandId = order.brand.toString();
+            const orderBrandId = (order.brand as any)._id?.toString() || order.brand.toString();
 
-            console.log(`[PaymentController] Authorizing payment. User: ${userId}, Order Brand: ${orderBrandId}`);
+            console.log(`[PaymentController] Authorizing payment. Requester: ${userId}, Order Owner: ${orderBrandId}`);
 
             if (orderBrandId !== userId) {
-                console.warn(`[PaymentController] Unauthorized payment attempt. User ${userId} tried to pay for order owned by ${orderBrandId}`);
-                return res.status(403).json({ message: 'Not authorized' });
+                return res.status(403).json({ message: 'Authorization protocol mismatch for payment' });
             }
 
             const amountToPay = order.totalAmount || order.price || 0;
@@ -117,12 +124,26 @@ export const PaymentController = {
     confirmPayment: async (req: AuthenticatedRequest, res: Response) => {
         try {
             const { paymentIntentId, orderId } = req.body;
-            console.log(`Confirming Payment. Order: ${orderId}, Intent: ${paymentIntentId}`);
+            console.log(`[PaymentController] Confirming Payment for Order: ${orderId}, PI: ${paymentIntentId}`);
+            require('fs').appendFileSync('payment_trace.log', `${new Date().toISOString()} - Confirming ${orderId}\n`);
+
+            if (!orderId) {
+                console.error("[PaymentController] Order ID missing in confirmation request");
+                return res.status(400).json({ message: "Order ID missing" });
+            }
 
             const order = await Order.findById(orderId);
-            if (!order) return res.status(404).json({ message: 'Order not found' });
+            if (!order) {
+                console.error(`[PaymentController] Order ${orderId} NOT FOUND during confirmation`);
+                return res.status(404).json({ message: 'Order not found' });
+            }
+
+            console.log(`[PaymentController] Current Order Status: ${order.status}, Paid: ${order.paid}`);
 
             const offer = await Offer.findById(order.offer);
+            if (!offer) {
+                console.warn(`[PaymentController] No offer found for order ${orderId}`);
+            }
 
             const now = new Date();
             let newDeadline = new Date(now);
@@ -139,31 +160,68 @@ export const PaymentController = {
                 newDeadline.setDate(now.getDate() + 3);
             }
 
+            console.log(`[PaymentController] Updating order ${orderId} to active/paid. New Deadline: ${newDeadline}`);
+
             order.status = 'active';
             order.paid = true;
             order.paymentIntentId = paymentIntentId;
             order.deadline = newDeadline;
             const updatedOrder = await order.save();
 
+            console.log(`[PaymentController] Order ${orderId} updated successfully.`);
+
             if (offer) {
                 offer.status = 'accepted';
+                offer.paid = true;
                 await offer.save();
+                console.log(`[PaymentController] Offer ${offer._id} status synced to accepted and paid.`);
             }
 
             const creatorEarningCents = Math.round(order.price * 100);
 
+            console.log(`[PaymentController] Creating transaction for creator ${order.creator}. Amount: ${creatorEarningCents}`);
+
             await Transaction.create({
                 user: order.creator,
+                order: order._id,
                 type: 'earning',
                 amount: creatorEarningCents,
-                currency: 'usd',
+                currency: 'eur',
                 status: 'pending',
                 description: `Earning from Order #${orderId}`,
             });
 
+            console.log("[PaymentController] Transaction created. Sending notifications...");
+
+            // Notify Creator
+            const creatorUser = await User.findById(order.creator);
+            if (creatorUser) {
+                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                await NotificationService.sendPaymentConfirmed(
+                    creatorUser.id,
+                    creatorUser.email,
+                    order.id,
+                    `${frontendUrl}/dashboard/creator/orders/${order.id}`,
+                    false
+                );
+            }
+
+            // Notify Brand
+            const brandUser = await User.findById(order.brand);
+            if (brandUser) {
+                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                await NotificationService.sendPaymentConfirmed(
+                    brandUser.id,
+                    brandUser.email,
+                    order.id,
+                    `${frontendUrl}/dashboard/brand/orders/${order.id}`,
+                    true
+                );
+            }
+
             res.json({ success: true, order: updatedOrder });
         } catch (error: any) {
-            console.error("Confirmation Error:", error);
+            console.error("[PaymentController] Confirmation CRITICAL Error:", error);
             res.status(500).json({ message: error.message });
         }
     },
@@ -206,7 +264,7 @@ export const PaymentController = {
                 user: userId,
                 type: 'payout',
                 amount: -requestCents,
-                currency: 'usd',
+                currency: 'eur',
                 status: status,
                 description: description,
             });

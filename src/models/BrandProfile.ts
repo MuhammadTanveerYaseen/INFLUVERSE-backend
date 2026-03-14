@@ -18,6 +18,7 @@ export interface IBrandProfile extends Document {
         country?: string;
         taxId?: string;
     };
+    savedCreators?: mongoose.Types.ObjectId[];
     createdAt: Date;
     updatedAt: Date;
 }
@@ -44,7 +45,8 @@ const brandProfileSchema: Schema = new Schema({
         zip: { type: String },
         country: { type: String },
         taxId: { type: String }
-    }
+    },
+    savedCreators: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, {
     timestamps: true
 });

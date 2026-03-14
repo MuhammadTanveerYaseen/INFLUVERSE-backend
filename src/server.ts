@@ -40,6 +40,12 @@ app.get('/', (req: Request, res: Response) => {
     res.send('Influverse API Service is running');
 });
 
+// 404 Handler for undefined routes
+app.use((req: Request, res: Response, next: NextFunction) => {
+    console.log(`[404] Not Found: ${req.method} ${req.originalUrl}`);
+    res.status(404).json({ message: `Route ${req.originalUrl} not found on this server` });
+});
+
 
 // Error Handling Middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
