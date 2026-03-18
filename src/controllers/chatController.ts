@@ -107,6 +107,22 @@ export const sendMessage = async (req: Request | any, res: Response) => {
             }
         }
 
+        // Check for block status before creating message
+        const otherParticipantId = chat.participants.find(p => p.toString() !== userId);
+        if (otherParticipantId) {
+            const recipient = await User.findById(otherParticipantId);
+            if (recipient && recipient.blockedUsers.some(id => id.toString() === userId)) {
+                console.log(`[Chat] Blocking message: recipient ${otherParticipantId} has blocked sender ${userId}`);
+                return res.status(403).json({ message: 'You have been blocked by this user.' });
+            }
+            
+            const sender = await User.findById(userId);
+            if (sender && sender.blockedUsers.some(id => id.toString() === otherParticipantId.toString())) {
+                console.log(`[Chat] Blocking message: sender ${userId} has blocked recipient ${otherParticipantId}`);
+                return res.status(403).json({ message: 'You have blocked this user. Unblock them to send messages.' });
+            }
+        }
+
         const message = await Message.create({
             chat: chatId,
             sender: userId,
@@ -118,7 +134,6 @@ export const sendMessage = async (req: Request | any, res: Response) => {
 
         chat.updatedAt = new Date();
         await chat.save();
-
         const populatedMessage = await Message.findById(message._id).populate('sender', 'username');
 
         chat.participants.forEach((participantId: any) => {
@@ -134,6 +149,109 @@ export const sendMessage = async (req: Request | any, res: Response) => {
         res.status(500).json({ message: error.message });
     }
 };
+// @desc    Clear all messages in a chat
+export const clearChat = async (req: Request | any, res: Response) => {
+    try {
+        const { chatId } = req.params;
+        const userId = (req.user._id || req.user.id).toString();
+
+        const chat = await Chat.findById(chatId);
+        if (!chat) return res.status(404).json({ message: 'Chat not found' });
+
+        const isParticipant = chat.participants.some(p => p.toString() === userId);
+        if (!isParticipant && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        await Message.deleteMany({ chat: chatId });
+        
+        chat.participants.forEach((participantId: any) => {
+            emitToUser(participantId.toString(), 'chat_cleared', { chatId });
+        });
+
+        res.json({ message: 'Chat cleared successfully' });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Delete a chat and its messages
+export const deleteChat = async (req: Request | any, res: Response) => {
+    try {
+        const { chatId } = req.params;
+        const userId = (req.user._id || req.user.id).toString();
+
+        const chat = await Chat.findById(chatId);
+        if (!chat) return res.status(404).json({ message: 'Chat not found' });
+
+        const isParticipant = chat.participants.some(p => p.toString() === userId);
+        if (!isParticipant && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        await Message.deleteMany({ chat: chatId });
+        await chat.deleteOne();
+
+        chat.participants.forEach((participantId: any) => {
+            emitToUser(participantId.toString(), 'chat_deleted', { chatId });
+        });
+
+        res.json({ message: 'Chat deleted successfully' });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Block/Unblock a user
+export const toggleBlockUser = async (req: Request | any, res: Response) => {
+    try {
+        const { targetUserId } = req.body;
+        const userId = (req.user._id || req.user.id).toString();
+
+        if (targetUserId === userId) {
+            return res.status(400).json({ message: 'You cannot block yourself' });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const isBlocked = user.blockedUsers.some(id => id.toString() === targetUserId);
+
+        if (isBlocked) {
+            user.blockedUsers = user.blockedUsers.filter(id => id.toString() !== targetUserId);
+            await user.save();
+            res.json({ message: 'User unblocked', isBlocked: false });
+        } else {
+            user.blockedUsers.push(targetUserId);
+            await user.save();
+            res.json({ message: 'User blocked', isBlocked: true });
+        }
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Check if a user is blocked
+export const checkBlockStatus = async (req: Request | any, res: Response) => {
+    try {
+        const { targetUserId } = req.params;
+        const userId = (req.user._id || req.user.id).toString();
+
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const isBlocked = user.blockedUsers.some(id => id.toString() === targetUserId);
+        
+        const targetUser = await User.findById(targetUserId);
+        const amIBlocked = targetUser?.blockedUsers.some(id => id.toString() === userId) || false;
+
+        res.json({ isBlocked, amIBlocked });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+
 
 // @desc    Get Messages & Mark as Read
 export const getMessages = async (req: Request | any, res: Response) => {

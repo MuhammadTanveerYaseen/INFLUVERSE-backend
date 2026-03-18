@@ -10,8 +10,8 @@ import bcrypt from 'bcryptjs';
 import { sendEmail, emailTemplates } from '../utils/emailService';
 import mongoose from 'mongoose';
 
-const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, rejectionReason?: string) => {
-    return jwt.sign({ id, role, username, email, status, isVerified, rejectionReason }, process.env.JWT_SECRET || 'secret', {
+const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, name?: string, rejectionReason?: string) => {
+    return jwt.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '30d',
     });
 };
@@ -36,6 +36,7 @@ export const registerBrand = async (req: Request, res: Response) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     const user = await User.create({
+        name: username,
         username,
         email,
         password,
@@ -86,6 +87,7 @@ export const getBrandProfile = async (req: Request | any, res: Response) => {
         const profile = await BrandProfile.findOne({ user: user._id });
         res.json({
             _id: user._id,
+            name: user.name,
             username: user.username,
             email: user.email,
             role: user.role,
@@ -106,6 +108,7 @@ export const updateBrandProfile = async (req: Request | any, res: Response) => {
     if (user && user.role === 'brand') {
         if (req.body.username) user.username = req.body.username;
         if (req.body.email) user.email = req.body.email;
+        if (req.body.name) user.name = req.body.name;
         if (req.body.password) {
             user.password = req.body.password;
         }
@@ -135,10 +138,11 @@ export const updateBrandProfile = async (req: Request | any, res: Response) => {
 
         res.json({
             _id: updatedUser._id,
+            name: updatedUser.name,
             username: updatedUser.username,
             email: updatedUser.email,
             role: updatedUser.role,
-            token: generateToken(updatedUser._id.toString(), updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.rejectionReason),
+            token: generateToken(updatedUser._id.toString(), updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason),
             profileData: updatedProfile
         });
     } else {
@@ -311,7 +315,12 @@ export const toggleFavoriteCreator = async (req: Request | any, res: Response) =
         profile.markModified('savedCreators');
         await profile.save();
 
-        res.json({ message: isFavorited ? 'Creator favorited' : 'Creator unfavorited', isFavorited, savedCreators: profile.savedCreators });
+        res.json({ 
+            message: isFavorited ? 'Creator favorited' : 'Creator unfavorited', 
+            isFavorited, 
+            // Serialize ObjectIds to plain strings so frontend can reliably compare
+            savedCreators: profile.savedCreators.map(id => id.toString()) 
+        });
     } catch (error: any) {
         console.error("Favorite Creator Error:", error);
         res.status(500).json({ message: "Failed to toggle favorite creator" });

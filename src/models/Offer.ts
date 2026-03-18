@@ -6,8 +6,6 @@ export interface IOffer extends Document {
     sender?: mongoose.Types.ObjectId; // Who initiated the offer
     price: number;
     deliverables: string; // description of work
-    deadline: Date;
-    durationDays: number; // Store original duration
     usageRights?: string;
     status: 'pending' | 'accepted' | 'rejected' | 'countered';
     counterOffer?: {
@@ -39,8 +37,6 @@ const offerSchema: Schema = new Schema({
     },
     price: { type: Number, required: true },
     deliverables: { type: String, required: true },
-    deadline: { type: Date, required: true },
-    durationDays: { type: Number, default: 3 }, // Store original duration intent
     usageRights: { type: String },
     status: {
         type: String,

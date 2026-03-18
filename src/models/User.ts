@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
+    name: string;
     username: string;
     email: string;
     password?: string;
@@ -19,9 +20,14 @@ export interface IUser extends Document {
     otpExpires?: Date;
     resetPasswordToken?: string;
     resetPasswordExpire?: Date;
+    blockedUsers: mongoose.Types.ObjectId[];
 }
 
 const userSchema: Schema = new Schema({
+    name: {
+        type: String,
+        default: '',
+    },
     username: {
         type: String,
         required: true,
@@ -54,6 +60,11 @@ const userSchema: Schema = new Schema({
         type: String,
         default: '',
     },
+    blockedUsers: [{
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: []
+    }],
     verificationToken: String,
     verificationTokenExpires: Date,
     otp: String,

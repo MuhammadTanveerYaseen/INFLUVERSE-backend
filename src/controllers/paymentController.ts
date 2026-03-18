@@ -145,27 +145,11 @@ export const PaymentController = {
                 console.warn(`[PaymentController] No offer found for order ${orderId}`);
             }
 
-            const now = new Date();
-            let newDeadline = new Date(now);
-
-            if (offer && offer.durationDays) {
-                newDeadline.setDate(now.getDate() + offer.durationDays);
-            } else if (order.deadline) {
-                if (new Date(order.deadline) < now) {
-                    newDeadline.setDate(now.getDate() + 3);
-                } else {
-                    newDeadline = new Date(order.deadline);
-                }
-            } else {
-                newDeadline.setDate(now.getDate() + 3);
-            }
-
-            console.log(`[PaymentController] Updating order ${orderId} to active/paid. New Deadline: ${newDeadline}`);
+            console.log(`[PaymentController] Updating order ${orderId} to active/paid.`);
 
             order.status = 'active';
             order.paid = true;
             order.paymentIntentId = paymentIntentId;
-            order.deadline = newDeadline;
             const updatedOrder = await order.save();
 
             console.log(`[PaymentController] Order ${orderId} updated successfully.`);

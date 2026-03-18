@@ -2,9 +2,13 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ICRMItem extends Document {
     type: string;
-    name: string;
-    email: string;
     platform: string;
+    category: string;
+    name: string;
+    channelUrl: string;
+    channelId: string;
+    email: string;
+    follower: string;
     phase: string;
     worker: string;
     outreachedDate?: Date;
@@ -15,19 +19,23 @@ export interface ICRMItem extends Document {
 }
 
 const crmItemSchema: Schema = new Schema({
-    type: { type: String, default: 'Creator' },
-    name: { type: String, default: '' },
-    email: { type: String, default: '' },
+    type:     { type: String, default: '' },
     platform: { type: String, default: '' },
+    category: { type: String, default: '' },
+    name:     { type: String, default: '' },
+    channelUrl: { type: String, default: '' },
+    channelId:  { type: String, default: '' },
+    email:    { type: String, default: '' },
+    follower: { type: String, default: '' },
     phase: {
         type: String,
         enum: ['potential', 'outreached', 'interested', 'not_interested', 'on_hold', 'onboarded'],
         default: 'potential'
     },
-    worker: { type: String, default: '' },
+    worker:         { type: String, default: '' },
     outreachedDate: { type: Date },
-    followUpDate: { type: Date },
-    comments: { type: String, default: '' }
+    followUpDate:   { type: Date },
+    comments:       { type: String, default: '' }
 }, {
     timestamps: true
 });

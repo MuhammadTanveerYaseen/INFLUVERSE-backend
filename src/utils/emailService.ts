@@ -5,28 +5,40 @@ const wrapEmail = (title: string, content: string) => `
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-  .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 20px; margin-bottom: 20px; }
-  .header { background-color: #7c3aed; color: #ffffff; padding: 30px; text-align: center; }
-  .header h1 { margin: 0; font-size: 24px; font-weight: 700; }
-  .content { padding: 40px 30px; color: #333333; line-height: 1.6; }
-  .footer { background-color: #f9fafb; padding: 20px; text-align: center; color: #6b7280; font-size: 12px; border-top: 1px solid #e5e7eb; }
-  .btn { display: inline-block; background-color: #7c3aed; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600; margin-top: 20px; }
-  .info-box { background-color: #f3f4f6; padding: 15px; border-left: 4px solid #7c3aed; margin: 20px 0; border-radius: 4px; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+  .wrapper { background-color: #f8fafc; padding: 40px 20px; }
+  .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+  .header { background-color: #ffffff; padding: 40px 30px; text-align: center; border-bottom: 1px solid #f1f5f9; }
+  .header img { height: 32px; margin-bottom: 20px; }
+  .header h1 { margin: 0; color: #0271e0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em; }
+  .content { padding: 40px 30px; color: #334155; line-height: 1.7; font-size: 16px; }
+  .footer { background-color: #f8fafc; padding: 30px; text-align: center; color: #64748b; font-size: 13px; border-top: 1px solid #f1f5f9; }
+  .btn { display: inline-block; background-color: #0271e0; color: #ffffff !important; padding: 14px 28px; text-decoration: none; border-radius: 99px; font-weight: 700; margin-top: 24px; letter-spacing: 0.025em; transition: all 0.3s ease; }
+  .info-box { background-color: #f0f7ff; padding: 20px; border-left: 5px solid #0271e0; margin: 24px 0; border-radius: 8px; color: #1e3a8a; }
+  .otp-code { font-size: 42px; font-weight: 900; color: #0271e0; letter-spacing: 10px; margin: 20px 0; font-family: 'Courier New', Courier, monospace; }
+  p { margin-bottom: 16px; }
+  strong { color: #0f172a; }
 </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>${title}</h1>
-    </div>
-    <div class="content">
-      ${content}
-    </div>
-    <div class="footer">
-      <p>&copy; ${new Date().getFullYear()} Influverse. All rights reserved.</p>
-      <p>This is an automated system email. Please do not reply directly.</p>
+  <div class="wrapper">
+    <div class="container">
+      <div class="header">
+        <!-- Using high-quality logo mark -->
+        <img src="https://api.influverse.tech/public/logo-mark.png" alt="Influverse" style="display: block; margin: 0 auto 15px; width: 48px; height: 48px;">
+        <h1>${title}</h1>
+      </div>
+      <div class="content">
+        ${content}
+      </div>
+      <div class="footer">
+        <p style="font-weight: 700; color: #0271e0; margin-bottom: 4px;">INFLUVERSE</p>
+        <p>&copy; ${new Date().getFullYear()} Influverse. All rights reserved.</p>
+        <p>This is an automated system email. Please do not reply directly.</p>
+      </div>
     </div>
   </div>
 </body>
@@ -132,14 +144,12 @@ export const emailTemplates = {
     otpVerification: (otp: string) => wrapEmail(
         'Verify Your Account with OTP 🔒',
         `
-        <div class="content">
+        <div class="content" style="text-align: center;">
             <p>Welcome to Influverse! To complete your registration, please use the verification code below.</p>
-            <div class="info-box" style="text-align: center;">
-                <h2 style="margin: 0; letter-spacing: 5px; font-size: 32px; color: #7c3aed;">${otp}</h2>
-                <p style="margin-top: 10px; font-size: 14px; color: #6b7280;">This code will expire in 10 minutes.</p>
-            </div>
+            <div class="otp-code">${otp}</div>
+            <p style="margin-top: 10px; font-size: 14px; color: #64748b;">This code will expire in 10 minutes.</p>
             <p>Enter this code on the verification screen to activate your account.</p>
-            <p style="margin-top: 20px; font-size: 12px; color: #6b7280;">If you didn't request this code, please ignore this email.</p>
+            <p style="margin-top: 20px; font-size: 12px; color: #94a3b8;">If you didn't request this code, please ignore this email.</p>
         </div>
         `
     ),

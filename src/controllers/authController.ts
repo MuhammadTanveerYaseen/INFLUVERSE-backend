@@ -11,6 +11,7 @@ import { sendEmail, emailTemplates } from '../utils/emailService';
 // @access  Public
 export const forgotPassword = async (req: Request, res: Response) => {
     const { email } = req.body;
+    console.log(`[ForgotPassword] Request for: ${email}`);
 
     try {
         const user = await User.findOne({ email });
@@ -90,8 +91,38 @@ export const resetPassword = async (req: Request, res: Response) => {
     }
 };
 
-const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, rejectionReason?: string) => {
-    return jwt.sign({ id, role, username, email, status, isVerified, rejectionReason }, process.env.JWT_SECRET || 'secret', {
+// @desc    Change Password
+// @route   PUT /api/auth/change-password
+// @access  Private
+export const changePassword = async (req: Request, res: Response) => {
+    const { currentPassword, newPassword } = req.body;
+    const userId = (req as any).user._id;
+    console.log(`[ChangePassword] Request for user: ${userId}`);
+
+    try {
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password as string);
+
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Incorrect current password' });
+        }
+
+        user.password = newPassword;
+        await user.save();
+
+        res.status(200).json({ message: 'Password changed successfully' });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, name?: string, rejectionReason?: string) => {
+    return jwt.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '30d',
     });
 };
@@ -107,13 +138,14 @@ export const authUser = async (req: Request, res: Response) => {
     if (user && user.password && (await bcrypt.compare(password, user.password))) {
         res.json({
             _id: user._id || user.id,
+            name: user.name,
             username: user.username,
             email: user.email,
             role: user.role,
             status: user.status,
             isVerified: user.isVerified,
             rejectionReason: user.rejectionReason,
-            token: generateToken((user.id || user._id).toString(), user.role, user.username, user.email, user.status, user.isVerified, user.rejectionReason || undefined),
+            token: generateToken((user.id || user._id).toString(), user.role, user.username, user.email, user.status, user.isVerified, user.name, user.rejectionReason || undefined),
         });
     } else {
         res.status(401).json({ message: 'Invalid email or password' });

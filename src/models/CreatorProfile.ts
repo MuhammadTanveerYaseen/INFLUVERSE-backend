@@ -4,7 +4,6 @@ export interface ICreatorPackage {
     name: string; // Basic, Standard, Premium
     price: number;
     description: string;
-    deliveryDays: number;
     revisions: number;
     features: string[];
     addOns?: IAddOn[]; // Nested add-ons per package concept if needed, or global addOns
@@ -44,8 +43,8 @@ export interface ICreatorProfile extends Document {
         reviewCount: number;
     };
     verified: boolean;
-    availability: string; // Changed from boolean available
     isFeatured: boolean;
+    availability: string; // Changed from boolean available
     phoneNumber?: string;
     stripeConnectId?: string; // For payouts
     bankDetails?: {
@@ -69,7 +68,6 @@ const packageSchema = new Schema({
     name: { type: String, required: true }, // e.g., 'Basic', 'Standard'
     price: { type: Number, required: true },
     description: { type: String }, // Describes deliverables
-    deliveryDays: { type: Number, default: 3 },
     revisions: { type: Number, default: 1 },
     features: [String],
     addOns: [addOnSchema]

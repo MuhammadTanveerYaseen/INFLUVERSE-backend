@@ -14,8 +14,17 @@ import Message from '../models/Message';
 // @access  Private (Admin)
 export const getUsers = async (req: Request, res: Response) => {
     try {
-        const users = await User.find().select('-password');
-        res.json(users);
+        const users = await User.find().select('-password').lean(); // Use lean for faster processing
+
+        const usersWithFeatured = await Promise.all(users.map(async (u: any) => {
+            if (u.role === 'creator') {
+                const profile = await CreatorProfile.findOne({ user: u._id }).select('isFeatured');
+                return { ...u, isFeatured: profile?.isFeatured || false };
+            }
+            return u;
+        }));
+
+        res.json(usersWithFeatured);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
@@ -129,6 +138,33 @@ export const toggleUserVerification = async (req: Request, res: Response) => {
         }
 
         res.json({ message: `User verification set to ${user.isVerified}`, isVerified: user.isVerified });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Toggle Creator Featured Status
+// @route   PATCH /api/admin/creators/:id/featured
+// @access  Private (Admin)
+export const toggleCreatorFeatured = async (req: Request, res: Response) => {
+    try {
+        const profile = await CreatorProfile.findById(req.params.id);
+        if (!profile) {
+            // Check if ID is user ID
+            const profileByUser = await CreatorProfile.findOne({ user: req.params.id });
+            if (!profileByUser) {
+                res.status(404);
+                throw new Error('Creator profile not found');
+            }
+            profileByUser.isFeatured = !profileByUser.isFeatured;
+            await profileByUser.save();
+            return res.json({ message: `Featured status set to ${profileByUser.isFeatured}`, isFeatured: profileByUser.isFeatured });
+        }
+
+        profile.isFeatured = !profile.isFeatured;
+        await profile.save();
+
+        res.json({ message: `Featured status set to ${profile.isFeatured}`, isFeatured: profile.isFeatured });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }

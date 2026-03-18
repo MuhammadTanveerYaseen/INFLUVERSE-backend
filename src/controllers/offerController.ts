@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 
 export const createOffer = async (req: Request | any, res: Response) => {
     try {
-        const { creatorId, targetId, price, deliverables, deadline, usageRights, chatId } = req.body;
+        const { creatorId, targetId, price, deliverables, usageRights, chatId } = req.body;
         const senderId = (req.user._id || req.user.id).toString();
         const role = req.user.role;
 
@@ -60,27 +60,12 @@ export const createOffer = async (req: Request | any, res: Response) => {
             chat = await ChatService.findOrCreateNegotiationChat([brandId, creatorIdLocal]);
         }
 
-        // 2. Create Offer
-        const start = new Date();
-        const end = new Date(deadline);
-        let diffDays = 3; // Default
-
-        if (!isNaN(end.getTime())) {
-            const diffTime = end.getTime() - start.getTime();
-            if (diffTime > 0) {
-                const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (days > 0) diffDays = days;
-            }
-        }
-
         const offer = await OfferService.createOffer({
             brand: brandId,
             creator: creatorIdLocal,
             sender: senderId,
             price: Number(price),
             deliverables,
-            deadline,
-            durationDays: diffDays,
             usageRights,
             chat: chat._id
         });

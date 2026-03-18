@@ -1,5 +1,5 @@
 import express from 'express';
-import { getUsers, manageUser, getPendingVerifications, verifyCreator, getOrders, manageOrder, getFinancialStats, getDashboardOverview, getReports, resolveReport, getPayouts, releasePayout, getPlatformSettings, updatePlatformSettings, getWithdrawals, processWithdrawal, getChatLogs, toggleUserVerification } from '../controllers/adminController';
+import { getUsers, manageUser, getPendingVerifications, verifyCreator, getOrders, manageOrder, getFinancialStats, getDashboardOverview, getReports, resolveReport, getPayouts, releasePayout, getPlatformSettings, updatePlatformSettings, getWithdrawals, processWithdrawal, getChatLogs, toggleUserVerification, toggleCreatorFeatured } from '../controllers/adminController';
 import { protect, authorize } from '../middleware/authMiddleware';
 
 const router = express.Router();
@@ -10,6 +10,7 @@ router.patch('/users/:id/status', protect, authorize('admin'), manageUser); // U
 router.patch('/users/:id/verify', protect, authorize('admin'), toggleUserVerification); // New
 router.get('/creators/verifications', protect, authorize('admin'), getPendingVerifications); // Updated
 router.put('/creators/:id/review', protect, authorize('admin'), verifyCreator); // Updated
+router.patch('/creators/:id/featured', protect, authorize('admin'), toggleCreatorFeatured); // New
 
 router.get('/orders', protect, authorize('admin'), getOrders);
 router.patch('/orders/:id', protect, authorize('admin'), manageOrder);

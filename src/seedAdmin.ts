@@ -18,6 +18,7 @@ const seedAdmin = async () => {
         }
 
         const admin = await User.create({
+            name: 'System Administrator',
             username: 'admin',
             email: 'admin@influverse.com',
             password: 'adminpassword123',

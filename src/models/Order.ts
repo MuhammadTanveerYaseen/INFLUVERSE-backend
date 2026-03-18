@@ -17,7 +17,6 @@ export interface IOrder extends Document {
     paid: boolean;
     paymentIntentId?: string;
     completedAt?: Date;
-    deadline?: Date; // Correctly recalculated deadline
     payoutDueDate?: Date;
     payoutReleased?: boolean;
     packageDetails?: any;
@@ -57,7 +56,6 @@ const orderSchema: Schema = new Schema({
     paid: { type: Boolean, default: false },
     paymentIntentId: String,
     completedAt: Date,
-    deadline: Date,
     payoutDueDate: Date,
     payoutReleased: { type: Boolean, default: false },
     packageDetails: { type: Schema.Types.Mixed }

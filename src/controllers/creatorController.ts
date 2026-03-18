@@ -9,8 +9,8 @@ import bcrypt from 'bcryptjs';
 import { sendEmail, emailTemplates } from '../utils/emailService';
 import mongoose from 'mongoose';
 
-const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, rejectionReason?: string) => {
-    return jwt.sign({ id, role, username, email, status, isVerified, rejectionReason }, process.env.JWT_SECRET || 'secret', {
+const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, name?: string, rejectionReason?: string) => {
+    return jwt.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '30d',
     });
 };
@@ -32,6 +32,7 @@ export const registerCreator = async (req: Request, res: Response) => {
 
     // The user schema triggers a pre hook for bcrypt hashing so we don't strictly need it, but we can do it explicitly.
     const user = await User.create({
+        name: username,
         username,
         email,
         password, // Handled by pre('save') hook in Mongoose model if present.
@@ -83,6 +84,7 @@ export const getCreatorProfile = async (req: Request | any, res: Response) => {
         const profile = await CreatorProfile.findOne({ user: user.id });
         res.json({
             _id: user.id,
+            name: user.name,
             username: user.username,
             email: user.email,
             role: user.role,
@@ -105,6 +107,7 @@ export const updateCreatorProfile = async (req: Request | any, res: Response) =>
     if (user && user.role === 'creator') {
         if (req.body.username) user.username = req.body.username;
         if (req.body.email) user.email = req.body.email;
+        if (req.body.name) user.name = req.body.name;
         if (req.body.password) {
             user.password = req.body.password;
         }
@@ -131,11 +134,12 @@ export const updateCreatorProfile = async (req: Request | any, res: Response) =>
 
         res.json({
             _id: updatedUser.id,
+            name: updatedUser.name,
             username: updatedUser.username,
             email: updatedUser.email,
             role: updatedUser.role,
             status: updatedUser.status, // Return current status
-            token: generateToken(updatedUser.id, updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.rejectionReason),
+            token: generateToken(updatedUser.id, updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason),
             profileData: updatedProfile
         });
     } else {
@@ -149,7 +153,7 @@ export const updateCreatorProfile = async (req: Request | any, res: Response) =>
 // @access  Public
 export const getCreators = async (req: Request, res: Response) => {
     try {
-        const { category, country } = req.query;
+        const { category, country, featured } = req.query;
 
         let query: any = {};
 
@@ -158,6 +162,9 @@ export const getCreators = async (req: Request, res: Response) => {
         }
         if (country) {
             query.country = new RegExp(country as string, 'i');
+        }
+        if (featured === 'true') {
+            query.isFeatured = true;
         }
 
         const creatorsList = await CreatorProfile.find(query).populate('user', 'username email status isVerified');

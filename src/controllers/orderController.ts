@@ -231,17 +231,12 @@ export const createPackageOrder = async (req: Request | any, res: Response) => {
         // 1. Find or Create Chat for Negotiation/Booking
         const chat = await ChatService.findOrCreateNegotiationChat([(userId as any).toString(), creatorId.toString()]);
 
-        // 2. Create a PENDING Offer (instead of active order)
-        const deadline = new Date();
-        deadline.setDate(deadline.getDate() + 7); // Default 7 days if not specified
-
         const offer = await OfferService.createOffer({
             brand: userId,
             creator: creatorId,
             sender: userId,
             price: numericPrice,
             deliverables: `Package Booking: ${packageDetails.name}\n${packageDetails.description || ''}`,
-            deadline: deadline,
             status: 'pending',
             packageDetails: packageDetails,
             chat: chat._id
