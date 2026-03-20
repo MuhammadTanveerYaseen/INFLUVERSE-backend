@@ -4,6 +4,8 @@ import User from '../models/User';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { sendEmail, emailTemplates } from '../utils/emailService';
+import BrandProfile from '../models/BrandProfile';
+import CreatorProfile from '../models/CreatorProfile';
 
 // Auth Controller
 // @desc    Forgot Password
@@ -125,6 +127,26 @@ const generateToken = (id: string, role: string, username: string, email: string
     return jwt.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '30d',
     });
+};
+
+
+// @desc    Delete Account
+// @route   DELETE /api/auth/delete-account
+// @access  Private
+export const deleteAccount = async (req: Request, res: Response) => {
+    const userId = (req as any).user._id;
+    const role = (req as any).user.role;
+    try {
+        await User.findByIdAndDelete(userId);
+        if (role === 'brand') {
+            await BrandProfile.findOneAndDelete({ user: userId });
+        } else if (role === 'creator') {
+            await CreatorProfile.findOneAndDelete({ user: userId });
+        }
+        res.status(200).json({ message: 'Account deleted successfully' });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
 };
 
 // @desc    Auth user & get token
