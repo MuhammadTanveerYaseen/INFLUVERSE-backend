@@ -14,16 +14,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateCRMItemOrder = exports.deleteCRMItem = exports.updateCRMItem = exports.createCRMItem = exports.getCRMItems = void 0;
 const CRMItem_1 = __importDefault(require("../models/CRMItem"));
-let crmCache = {
-    data: null,
-    lastUpdate: 0
-};
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const redis_1 = __importDefault(require("../config/redis"));
+const CACHE_KEY = 'crmItems';
+const CACHE_TTL = 300; // 5 minutes in seconds
 const getCRMItems = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const now = Date.now();
-        if (crmCache.data && (now - crmCache.lastUpdate < CACHE_TTL)) {
-            return res.status(200).json(crmCache.data);
+        if (redis_1.default.isOpen) {
+            const cachedData = yield redis_1.default.get(CACHE_KEY);
+            if (cachedData) {
+                return res.status(200).json(JSON.parse(cachedData));
+            }
         }
         const items = yield CRMItem_1.default.find().sort({ createdAt: -1 }).limit(500).lean();
         const mappedItems = items.map(crmItem => ({
@@ -42,8 +42,9 @@ const getCRMItems = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             followUpDate: crmItem.followUpDate ? new Date(crmItem.followUpDate).toISOString().split('T')[0] : '',
             comments: crmItem.comments
         }));
-        crmCache.data = mappedItems;
-        crmCache.lastUpdate = Date.now();
+        if (redis_1.default.isOpen) {
+            yield redis_1.default.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(mappedItems));
+        }
         res.status(200).json(mappedItems);
     }
     catch (error) {
@@ -55,7 +56,9 @@ exports.getCRMItems = getCRMItems;
 const createCRMItem = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const newItem = yield CRMItem_1.default.create(req.body);
-        crmCache.data = null; // Invalidate cache
+        if (redis_1.default.isOpen) {
+            yield redis_1.default.del(CACHE_KEY);
+        }
         res.status(201).json(newItem);
     }
     catch (error) {
@@ -85,7 +88,9 @@ const updateCRMItem = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             updateData.followUpDate = new Date(updateData.followUpDate);
         }
         yield CRMItem_1.default.findByIdAndUpdate(id, updateData, { new: true });
-        crmCache.data = null; // Invalidate cache
+        if (redis_1.default.isOpen) {
+            yield redis_1.default.del(CACHE_KEY);
+        }
         res.status(200).json({ message: 'CRM pipeline updated.' });
     }
     catch (error) {
@@ -100,7 +105,9 @@ const deleteCRMItem = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         const crmItem = yield CRMItem_1.default.findById(id);
         if (crmItem) {
             yield CRMItem_1.default.findByIdAndDelete(id);
-            crmCache.data = null; // Invalidate cache
+            if (redis_1.default.isOpen) {
+                yield redis_1.default.del(CACHE_KEY);
+            }
             res.status(200).json({ message: 'CRM item deleted.' });
         }
         else {

@@ -1,20 +1,20 @@
 import { Request, Response } from 'express';
 import CRMItem from '../models/CRMItem';
+import redisClient from '../config/redis';
 
-let crmCache = {
-    data: null as any,
-    lastUpdate: 0
-};
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_KEY = 'crmItems';
+const CACHE_TTL = 300; // 5 minutes in seconds
 
 export const getCRMItems = async (req: Request, res: Response) => {
     try {
-        const now = Date.now();
-        if (crmCache.data && (now - crmCache.lastUpdate < CACHE_TTL)) {
-            return res.status(200).json(crmCache.data);
+        if (redisClient.isReady) {
+            const cachedData = await redisClient.get(CACHE_KEY);
+            if (cachedData) {
+                return res.status(200).json(JSON.parse(cachedData));
+            }
         }
 
-        const items = await CRMItem.find().sort({ createdAt: -1 }).limit(500).lean();
+        const items = await CRMItem.find().sort({ createdAt: -1 }).lean();
 
         const mappedItems = items.map(crmItem => ({
             _id: crmItem._id,
@@ -33,8 +33,9 @@ export const getCRMItems = async (req: Request, res: Response) => {
             comments: crmItem.comments
         }));
 
-        crmCache.data = mappedItems;
-        crmCache.lastUpdate = Date.now();
+        if (redisClient.isReady) {
+            await redisClient.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(mappedItems));
+        }
 
         res.status(200).json(mappedItems);
     } catch (error) {
@@ -47,7 +48,9 @@ export const createCRMItem = async (req: Request, res: Response) => {
     try {
         const newItem = await CRMItem.create(req.body);
         
-        crmCache.data = null; // Invalidate cache
+        if (redisClient.isOpen) {
+            await redisClient.del(CACHE_KEY);
+        }
 
         res.status(201).json(newItem);
     } catch (error: any) {
@@ -81,7 +84,9 @@ export const updateCRMItem = async (req: Request, res: Response) => {
 
         await CRMItem.findByIdAndUpdate(id, updateData, { new: true });
 
-        crmCache.data = null; // Invalidate cache
+        if (redisClient.isOpen) {
+            await redisClient.del(CACHE_KEY);
+        }
 
         res.status(200).json({ message: 'CRM pipeline updated.' });
     } catch (error) {
@@ -97,7 +102,9 @@ export const deleteCRMItem = async (req: Request, res: Response) => {
         const crmItem = await CRMItem.findById(id);
         if (crmItem) {
             await CRMItem.findByIdAndDelete(id);
-            crmCache.data = null; // Invalidate cache
+            if (redisClient.isOpen) {
+                await redisClient.del(CACHE_KEY);
+            }
             res.status(200).json({ message: 'CRM item deleted.' });
         } else {
             res.status(404).json({ message: 'Item not found' });

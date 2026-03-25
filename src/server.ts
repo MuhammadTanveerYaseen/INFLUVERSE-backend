@@ -5,6 +5,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import connectDB from './config/db';
+import { connectRedis } from './config/redis';
 import apiRoutes from './routes/api';
 import { initSocket } from './services/socket.service';
 
@@ -36,7 +37,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Database Connection
 connectDB();
-// Prisma removed
+connectRedis();
 
 // Routes
 app.use('/api', apiRoutes);

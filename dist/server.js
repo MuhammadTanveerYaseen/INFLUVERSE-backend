@@ -9,6 +9,7 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const http_1 = require("http");
 const db_1 = __importDefault(require("./config/db"));
+const redis_1 = require("./config/redis");
 const api_1 = __importDefault(require("./routes/api"));
 const socket_service_1 = require("./services/socket.service");
 const app = (0, express_1.default)();
@@ -34,7 +35,7 @@ app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 // Database Connection
 (0, db_1.default)();
-// Prisma removed
+(0, redis_1.connectRedis)();
 // Routes
 app.use('/api', api_1.default);
 app.get('/', (req, res) => {
