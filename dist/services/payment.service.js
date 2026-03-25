@@ -62,18 +62,43 @@ class PaymentService {
             return accountLink.url;
         });
     }
-    // 2. Create Payment Intent for Brand (Pay for Order)
-    static createPaymentIntent(orderId, amount) {
+    // 2. Create Payment Intent for Brand (Pay for Order) with Destination Charge
+    static createPaymentIntent(orderId, amount, creatorId, platformFee) {
         return __awaiter(this, void 0, void 0, function* () {
-            // amount in dollars, convert to cents
+            // amount in eur, convert to cents
             const amountInCents = Math.round(amount * 100);
+            const applicationFeeInCents = Math.round(platformFee * 100);
+            const profile = yield CreatorProfile_1.default.findOne({ user: creatorId });
+            if (!profile)
+                throw new Error('Creator profile not found.');
+            let connectId = profile.stripeConnectId;
+            if (!connectId) {
+                const creatorUser = yield require('../models/User').default.findById(creatorId);
+                const account = yield stripe.accounts.create({
+                    type: 'express',
+                    country: profile.country || 'US',
+                    email: (creatorUser === null || creatorUser === void 0 ? void 0 : creatorUser.email) || '',
+                    capabilities: {
+                        card_payments: { requested: true },
+                        transfers: { requested: true },
+                    },
+                });
+                connectId = account.id;
+                profile.stripeConnectId = connectId;
+                profile.payoutsEnabled = false;
+                yield profile.save();
+            }
             const paymentIntent = yield stripe.paymentIntents.create({
                 amount: amountInCents,
-                currency: 'usd',
+                currency: 'eur',
                 metadata: { orderId },
                 automatic_payment_methods: {
                     enabled: true,
                 },
+                transfer_data: {
+                    destination: connectId,
+                },
+                application_fee_amount: applicationFeeInCents,
             });
             return paymentIntent;
         });
@@ -87,7 +112,7 @@ class PaymentService {
             }
             const transfer = yield stripe.transfers.create({
                 amount: Math.round(amount * 100),
-                currency: 'usd',
+                currency: 'eur',
                 destination: profile.stripeConnectId,
                 description: 'Payout from Influverse',
             });

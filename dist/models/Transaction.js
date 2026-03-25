@@ -55,7 +55,7 @@ const transactionSchema = new mongoose_1.Schema({
     },
     currency: {
         type: String,
-        default: 'usd'
+        default: 'eur'
     },
     status: {
         type: String,

@@ -54,8 +54,8 @@ const orderSchema = new mongoose_1.Schema({
     totalAmount: { type: Number, required: true },
     status: {
         type: String,
-        enum: ['active', 'delivered', 'revision', 'approved', 'disputed', 'cancelled'],
-        default: 'active'
+        enum: ['pending_payment', 'active', 'delivered', 'revision', 'approved', 'disputed', 'cancelled'],
+        default: 'pending_payment'
     },
     deliverables: [{
             files: [String],
@@ -66,7 +66,6 @@ const orderSchema = new mongoose_1.Schema({
     paid: { type: Boolean, default: false },
     paymentIntentId: String,
     completedAt: Date,
-    deadline: Date,
     payoutDueDate: Date,
     payoutReleased: { type: Boolean, default: false },
     packageDetails: { type: mongoose_1.Schema.Types.Mixed }

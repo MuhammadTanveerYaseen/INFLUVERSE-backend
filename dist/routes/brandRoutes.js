@@ -11,4 +11,6 @@ router.post('/register', brandController_1.registerBrand);
 router.get('/profile', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('brand'), brandController_1.getBrandProfile);
 router.put('/profile', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('brand'), brandController_1.updateBrandProfile);
 router.get('/dashboard', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('brand'), brandController_1.getBrandDashboardStats);
+router.post('/favorites/:creatorId', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('brand'), brandController_1.toggleFavoriteCreator);
+router.get('/favorites', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('brand'), brandController_1.getFavoriteCreators);
 exports.default = router;

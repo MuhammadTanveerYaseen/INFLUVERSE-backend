@@ -10,8 +10,10 @@ const router = express_1.default.Router();
 router.get('/overview', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('admin'), adminController_1.getDashboardOverview);
 router.get('/users', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('admin'), adminController_1.getUsers);
 router.patch('/users/:id/status', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('admin'), adminController_1.manageUser); // Updated
+router.patch('/users/:id/verify', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('admin'), adminController_1.toggleUserVerification); // New
 router.get('/creators/verifications', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('admin'), adminController_1.getPendingVerifications); // Updated
 router.put('/creators/:id/review', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('admin'), adminController_1.verifyCreator); // Updated
+router.patch('/creators/:id/featured', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('admin'), adminController_1.toggleCreatorFeatured); // New
 router.get('/orders', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('admin'), adminController_1.getOrders);
 router.patch('/orders/:id', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('admin'), adminController_1.manageOrder);
 router.get('/finance', authMiddleware_1.protect, (0, authMiddleware_1.authorize)('admin'), adminController_1.getFinancialStats);

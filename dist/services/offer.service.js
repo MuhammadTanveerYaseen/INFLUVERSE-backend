@@ -31,7 +31,8 @@ class OfferService {
         return __awaiter(this, void 0, void 0, function* () {
             const offers = yield Offer_1.default.find(query)
                 .populate('brand', 'username')
-                .populate('creator', 'username');
+                .populate('creator', 'username')
+                .populate('order');
             return offers;
         });
     }

@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getChatLogs = exports.processWithdrawal = exports.getWithdrawals = exports.updatePlatformSettings = exports.getPublicPlatformSettings = exports.getPlatformSettings = exports.releasePayout = exports.getPayouts = exports.resolveReport = exports.getReports = exports.getDashboardOverview = exports.getFinancialStats = exports.manageOrder = exports.getOrders = exports.verifyCreator = exports.getPendingVerifications = exports.manageUser = exports.getUsers = void 0;
+exports.getChatLogs = exports.processWithdrawal = exports.getWithdrawals = exports.updatePlatformSettings = exports.getPublicPlatformSettings = exports.getPlatformSettings = exports.releasePayout = exports.getPayouts = exports.resolveReport = exports.getReports = exports.getDashboardOverview = exports.getFinancialStats = exports.manageOrder = exports.getOrders = exports.toggleCreatorFeatured = exports.toggleUserVerification = exports.verifyCreator = exports.getPendingVerifications = exports.manageUser = exports.getUsers = void 0;
 const User_1 = __importDefault(require("../models/User"));
 const CreatorProfile_1 = __importDefault(require("../models/CreatorProfile"));
 const Order_1 = __importDefault(require("../models/Order"));
@@ -26,8 +26,15 @@ const Message_1 = __importDefault(require("../models/Message"));
 // @access  Private (Admin)
 const getUsers = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const users = yield User_1.default.find().select('-password');
-        res.json(users);
+        const users = yield User_1.default.find().select('-password').lean(); // Use lean for faster processing
+        const usersWithFeatured = yield Promise.all(users.map((u) => __awaiter(void 0, void 0, void 0, function* () {
+            if (u.role === 'creator') {
+                const profile = yield CreatorProfile_1.default.findOne({ user: u._id }).select('isFeatured');
+                return Object.assign(Object.assign({}, u), { isFeatured: (profile === null || profile === void 0 ? void 0 : profile.isFeatured) || false });
+            }
+            return u;
+        })));
+        res.json(usersWithFeatured);
     }
     catch (error) {
         res.status(500).json({ message: error.message });
@@ -83,8 +90,12 @@ exports.getPendingVerifications = getPendingVerifications;
 // @access  Private (Admin)
 const verifyCreator = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { status, reason } = req.body; // 'approved' or 'rejected'
-    const profileId = req.params.id;
-    const profile = yield CreatorProfile_1.default.findById(profileId);
+    const id = req.params.id;
+    let profile = yield CreatorProfile_1.default.findById(id);
+    if (!profile) {
+        // Frontend often sends User ID, so we fallback to finding profile by user field
+        profile = yield CreatorProfile_1.default.findOne({ user: id });
+    }
     if (!profile) {
         res.status(404);
         throw new Error('Creator Profile not found');
@@ -96,9 +107,9 @@ const verifyCreator = (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
     if (status === 'approved') {
         creatorUser.status = 'active';
-        creatorUser.isVerified = true;
+        creatorUser.isVerified = true; // Assigned default verified tick upon approval
         creatorUser.rejectionReason = undefined;
-        profile.verified = true;
+        profile.verified = true; // Sync profile verification
     }
     else if (status === 'rejected') {
         creatorUser.status = 'rejected';
@@ -112,6 +123,55 @@ const verifyCreator = (req, res) => __awaiter(void 0, void 0, void 0, function* 
     res.json({ message: `Creator profile ${status}`, profile: updatedProfile });
 });
 exports.verifyCreator = verifyCreator;
+// @desc    Toggle User Verification (Verified Tick / Blue Tick)
+// @route   PATCH /api/admin/users/:id/verify
+// @access  Private (Admin)
+const toggleUserVerification = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const user = yield User_1.default.findById(req.params.id);
+        if (!user) {
+            res.status(404);
+            throw new Error('User not found');
+        }
+        user.isVerified = !user.isVerified;
+        yield user.save();
+        // If creator, also update profile for consistency
+        if (user.role === 'creator') {
+            yield CreatorProfile_1.default.findOneAndUpdate({ user: user._id }, { verified: user.isVerified });
+        }
+        res.json({ message: `User verification set to ${user.isVerified}`, isVerified: user.isVerified });
+    }
+    catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+exports.toggleUserVerification = toggleUserVerification;
+// @desc    Toggle Creator Featured Status
+// @route   PATCH /api/admin/creators/:id/featured
+// @access  Private (Admin)
+const toggleCreatorFeatured = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const profile = yield CreatorProfile_1.default.findById(req.params.id);
+        if (!profile) {
+            // Check if ID is user ID
+            const profileByUser = yield CreatorProfile_1.default.findOne({ user: req.params.id });
+            if (!profileByUser) {
+                res.status(404);
+                throw new Error('Creator profile not found');
+            }
+            profileByUser.isFeatured = !profileByUser.isFeatured;
+            yield profileByUser.save();
+            return res.json({ message: `Featured status set to ${profileByUser.isFeatured}`, isFeatured: profileByUser.isFeatured });
+        }
+        profile.isFeatured = !profile.isFeatured;
+        yield profile.save();
+        res.json({ message: `Featured status set to ${profile.isFeatured}`, isFeatured: profile.isFeatured });
+    }
+    catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+exports.toggleCreatorFeatured = toggleCreatorFeatured;
 // @desc    Get All Orders
 // @route   GET /api/admin/orders
 // @access  Private (Admin)

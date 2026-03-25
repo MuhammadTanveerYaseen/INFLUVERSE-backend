@@ -45,10 +45,12 @@ const offerSchema = new mongoose_1.Schema({
         ref: 'User',
         required: true
     },
+    sender: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: 'User'
+    },
     price: { type: Number, required: true },
     deliverables: { type: String, required: true },
-    deadline: { type: Date, required: true },
-    durationDays: { type: Number, default: 3 }, // Store original duration intent
     usageRights: { type: String },
     status: {
         type: String,
@@ -62,7 +64,13 @@ const offerSchema = new mongoose_1.Schema({
     chat: {
         type: mongoose_1.default.Schema.Types.ObjectId,
         ref: 'Chat'
-    }
+    },
+    order: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: 'Order'
+    },
+    paid: { type: Boolean, default: false },
+    packageDetails: { type: mongoose_1.Schema.Types.Mixed }
 }, {
     timestamps: true
 });

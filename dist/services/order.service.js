@@ -22,6 +22,9 @@ class OrderService {
             const settings = yield PlatformSettings_1.default.findOne();
             const feePercentage = (settings === null || settings === void 0 ? void 0 : settings.platformFeePercentage) || 15; // Default 15%
             const offerPrice = Number(offer.price);
+            if (isNaN(offerPrice) || offerPrice <= 0) {
+                throw new Error(`Invalid offer price: ${offer.price}`);
+            }
             // Calculate Platform Fee with precision
             const platformFee = Number((offerPrice * (feePercentage / 100)).toFixed(2));
             const totalAmount = Number((offerPrice + platformFee).toFixed(2));
@@ -32,8 +35,9 @@ class OrderService {
                 price: offerPrice,
                 platformFee,
                 totalAmount,
-                status: 'active',
+                status: 'pending_payment',
                 paid: false,
+                packageDetails: offer.packageDetails
             });
             return order;
         });

@@ -199,10 +199,19 @@ export class NotificationService {
             link
         );
 
-        await sendEmail(
-            email,
-            'Payment Confirmed - Order Active ✅',
-            message + ` View details: ${link}`
-        );
+        if (isBrand) {
+            await sendEmail(
+                email,
+                `Payment successful — Order #${orderId}`,
+                emailTemplates.paymentConfirmation(orderId, link)
+            );
+        } else {
+            // For creator, payment confirmation means the order is now created/active
+            await sendEmail(
+                email,
+                `Order #${orderId} created`,
+                emailTemplates.orderCreated(orderId, 'creator', link)
+            );
+        }
     }
 }

@@ -97,5 +97,29 @@ class NotificationService {
             yield (0, emailService_1.sendEmail)(email, `${title} ❌`, emailService_1.emailTemplates.orderCancelled(orderId, reason, link));
         });
     }
+    static sendPaymentRequired(recipientId, email, orderId, link) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // DB Notification
+            yield this.createNotification(recipientId, 'Payment Required', `Creator accepted! Please complete payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} to start the campaign.`, 'payment', link);
+            // Email
+            yield (0, emailService_1.sendEmail)(email, 'Action Required: Complete your Influverse Payment', `The creator has accepted your offer! To officially start the campaign and secure the timeframe, please complete the payment at: ${link}`);
+        });
+    }
+    static sendPaymentConfirmed(recipientId_1, email_1, orderId_1, link_1) {
+        return __awaiter(this, arguments, void 0, function* (recipientId, email, orderId, link, isBrand = false) {
+            const title = 'Payment Secured';
+            const message = isBrand
+                ? `Your payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} is successful. The creator has been notified.`
+                : `Payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} has been secured in escrow. You can now start the campaign!`;
+            yield this.createNotification(recipientId, title, message, 'payment', link);
+            if (isBrand) {
+                yield (0, emailService_1.sendEmail)(email, `Payment successful — Order #${orderId}`, emailService_1.emailTemplates.paymentConfirmation(orderId, link));
+            }
+            else {
+                // For creator, payment confirmation means the order is now created/active
+                yield (0, emailService_1.sendEmail)(email, `Order #${orderId} created`, emailService_1.emailTemplates.orderCreated(orderId, 'creator', link));
+            }
+        });
+    }
 }
 exports.NotificationService = NotificationService;

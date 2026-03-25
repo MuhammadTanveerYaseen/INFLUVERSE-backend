@@ -123,6 +123,10 @@ export const sendMessage = async (req: Request | any, res: Response) => {
             }
         }
 
+        const lastMessageInChat = await Message.findOne({ chat: chatId }).sort({ createdAt: -1 });
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const shouldSendEmail = !lastMessageInChat || lastMessageInChat.createdAt < twentyFourHoursAgo;
+
         const message = await Message.create({
             chat: chatId,
             sender: userId,
@@ -143,6 +147,25 @@ export const sendMessage = async (req: Request | any, res: Response) => {
             });
             emitToUser(participantId.toString(), 'refresh_chats', {});
         });
+
+        if (shouldSendEmail && otherParticipantId) {
+            try {
+                const recipientUser = await User.findById(otherParticipantId);
+                const senderUser = await User.findById(userId);
+                if (recipientUser && senderUser) {
+                    const { sendEmail, emailTemplates } = require('../utils/emailService');
+                    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                    const link = `${frontendUrl}/dashboard/${recipientUser.role}/messages/${chatId}`;
+                    await sendEmail(
+                        recipientUser.email,
+                        `New message from ${senderUser.username}`,
+                        emailTemplates.newMessage(senderUser.username, link, 'en') // Assume 'en' as default
+                    );
+                }
+            } catch (err) {
+                console.error('[Chat] Failed to send new message email:', err);
+            }
+        }
 
         res.status(201).json(populatedMessage);
     } catch (error: any) {

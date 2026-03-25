@@ -27,6 +27,9 @@ app.use((0, cors_1.default)({
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
+const stripeController_1 = require("./controllers/stripeController");
+// Parse raw body for Stripe webhook BEFORE JSON parser
+app.post('/api/stripe/webhook', express_1.default.raw({ type: 'application/json' }), stripeController_1.StripeController.webhook);
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 // Database Connection
@@ -36,6 +39,11 @@ app.use(express_1.default.urlencoded({ extended: true }));
 app.use('/api', api_1.default);
 app.get('/', (req, res) => {
     res.send('Influverse API Service is running');
+});
+// 404 Handler for undefined routes
+app.use((req, res, next) => {
+    console.log(`[404] Not Found: ${req.method} ${req.originalUrl}`);
+    res.status(404).json({ message: `Route ${req.originalUrl} not found on this server` });
 });
 // Error Handling Middleware
 app.use((err, req, res, next) => {

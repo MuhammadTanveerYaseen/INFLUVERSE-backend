@@ -54,8 +54,8 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const emailService_1 = require("../utils/emailService");
 const mongoose_1 = __importDefault(require("mongoose"));
-const generateToken = (id, role, username, email, status, isVerified, rejectionReason) => {
-    return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, rejectionReason }, process.env.JWT_SECRET || 'secret', {
+const generateToken = (id, role, username, email, status, isVerified, name, rejectionReason) => {
+    return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '30d',
     });
 };
@@ -72,6 +72,7 @@ const registerCreator = (req, res) => __awaiter(void 0, void 0, void 0, function
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     // The user schema triggers a pre hook for bcrypt hashing so we don't strictly need it, but we can do it explicitly.
     const user = yield User_1.default.create({
+        name: username,
         username,
         email,
         password, // Handled by pre('save') hook in Mongoose model if present.
@@ -116,6 +117,7 @@ const getCreatorProfile = (req, res) => __awaiter(void 0, void 0, void 0, functi
         const profile = yield CreatorProfile_1.default.findOne({ user: user.id });
         res.json({
             _id: user.id,
+            name: user.name,
             username: user.username,
             email: user.email,
             role: user.role,
@@ -140,6 +142,8 @@ const updateCreatorProfile = (req, res) => __awaiter(void 0, void 0, void 0, fun
             user.username = req.body.username;
         if (req.body.email)
             user.email = req.body.email;
+        if (req.body.name)
+            user.name = req.body.name;
         if (req.body.password) {
             user.password = req.body.password;
         }
@@ -156,11 +160,12 @@ const updateCreatorProfile = (req, res) => __awaiter(void 0, void 0, void 0, fun
         const updatedProfile = yield CreatorProfile_1.default.findOneAndUpdate({ user: user.id }, { $set: sanitizedData }, { new: true, runValidators: true });
         res.json({
             _id: updatedUser.id,
+            name: updatedUser.name,
             username: updatedUser.username,
             email: updatedUser.email,
             role: updatedUser.role,
             status: updatedUser.status, // Return current status
-            token: generateToken(updatedUser.id, updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.rejectionReason),
+            token: generateToken(updatedUser.id, updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason),
             profileData: updatedProfile
         });
     }
@@ -175,7 +180,7 @@ exports.updateCreatorProfile = updateCreatorProfile;
 // @access  Public
 const getCreators = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { category, country } = req.query;
+        const { category, country, featured } = req.query;
         let query = {};
         if (category && category !== 'all') {
             query.categories = { $in: [category] };
@@ -183,9 +188,12 @@ const getCreators = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         if (country) {
             query.country = new RegExp(country, 'i');
         }
-        const creatorsList = yield CreatorProfile_1.default.find(query).populate('user', 'username email isVerified');
-        // Filter out orphans
-        const validCreators = creatorsList.filter(c => c.user);
+        if (featured === 'true') {
+            query.isFeatured = true;
+        }
+        const creatorsList = yield CreatorProfile_1.default.find(query).populate('user', 'username email status isVerified');
+        // Filter out orphans and unapproved creators
+        const validCreators = creatorsList.filter(c => c.user && c.user.status === 'active');
         res.json(validCreators);
     }
     catch (error) {
@@ -211,11 +219,11 @@ const getCreatorById = (req, res) => __awaiter(void 0, void 0, void 0, function*
                 profile = yield CreatorProfile_1.default.findOne({ user: user._id }).populate('user', 'username email status isVerified');
             }
         }
-        if (profile) {
+        if (profile && profile.user.status === 'active') {
             res.json(profile);
         }
         else {
-            res.status(404).json({ message: 'Creator profile not found' });
+            res.status(404).json({ message: 'Creator profile not found or pending approval' });
         }
     }
     catch (error) {

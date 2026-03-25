@@ -54,6 +54,6 @@ exports.storage = new multer_storage_cloudinary_1.CloudinaryStorage({
 });
 const upload = (0, multer_1.default)({
     storage: exports.storage,
-    limits: { fileSize: 10 * 1024 * 1024 } // 10MB Limit
+    limits: { fileSize: 50 * 1024 * 1024 } // 50MB Limit
 });
 exports.upload = upload;

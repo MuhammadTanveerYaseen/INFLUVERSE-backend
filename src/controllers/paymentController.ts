@@ -111,7 +111,9 @@ export const PaymentController = {
                 return res.status(400).json({ message: 'Invalid order amount' });
             }
 
-            const paymentIntent = await PaymentService.createPaymentIntent(orderId, amountToPay);
+            const creatorId = order.creator.toString();
+            const platformFee = order.platformFee || 0;
+            const paymentIntent = await PaymentService.createPaymentIntent(orderId, amountToPay, creatorId, platformFee);
 
             res.json({ clientSecret: paymentIntent.client_secret });
         } catch (error: any) {

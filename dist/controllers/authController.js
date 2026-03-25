@@ -12,18 +12,21 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.authUser = exports.resetPassword = exports.forgotPassword = void 0;
+exports.authUser = exports.deleteAccount = exports.changePassword = exports.resetPassword = exports.forgotPassword = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
 const crypto_1 = __importDefault(require("crypto"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const emailService_1 = require("../utils/emailService");
+const BrandProfile_1 = __importDefault(require("../models/BrandProfile"));
+const CreatorProfile_1 = __importDefault(require("../models/CreatorProfile"));
 // Auth Controller
 // @desc    Forgot Password
 // @route   POST /api/auth/forgot-password
 // @access  Public
 const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { email } = req.body;
+    console.log(`[ForgotPassword] Request for: ${email}`);
     try {
         const user = yield User_1.default.findOne({ email });
         if (!user) {
@@ -89,11 +92,57 @@ const resetPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
 });
 exports.resetPassword = resetPassword;
-const generateToken = (id, role, username, email, status, isVerified, rejectionReason) => {
-    return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, rejectionReason }, process.env.JWT_SECRET || 'secret', {
+// @desc    Change Password
+// @route   PUT /api/auth/change-password
+// @access  Private
+const changePassword = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user._id;
+    console.log(`[ChangePassword] Request for user: ${userId}`);
+    try {
+        const user = yield User_1.default.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        const isMatch = yield bcryptjs_1.default.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Incorrect current password' });
+        }
+        user.password = newPassword;
+        yield user.save();
+        res.status(200).json({ message: 'Password changed successfully' });
+    }
+    catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+exports.changePassword = changePassword;
+const generateToken = (id, role, username, email, status, isVerified, name, rejectionReason) => {
+    return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '30d',
     });
 };
+// @desc    Delete Account
+// @route   DELETE /api/auth/delete-account
+// @access  Private
+const deleteAccount = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.user._id;
+    const role = req.user.role;
+    try {
+        yield User_1.default.findByIdAndDelete(userId);
+        if (role === 'brand') {
+            yield BrandProfile_1.default.findOneAndDelete({ user: userId });
+        }
+        else if (role === 'creator') {
+            yield CreatorProfile_1.default.findOneAndDelete({ user: userId });
+        }
+        res.status(200).json({ message: 'Account deleted successfully' });
+    }
+    catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+exports.deleteAccount = deleteAccount;
 // @desc    Auth user & get token
 // @route   POST /api/auth/login
 // @access  Public
@@ -103,13 +152,14 @@ const authUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     if (user && user.password && (yield bcryptjs_1.default.compare(password, user.password))) {
         res.json({
             _id: user._id || user.id,
+            name: user.name,
             username: user.username,
             email: user.email,
             role: user.role,
             status: user.status,
             isVerified: user.isVerified,
             rejectionReason: user.rejectionReason,
-            token: generateToken((user.id || user._id).toString(), user.role, user.username, user.email, user.status, user.isVerified, user.rejectionReason || undefined),
+            token: generateToken((user.id || user._id).toString(), user.role, user.username, user.email, user.status, user.isVerified, user.name, user.rejectionReason || undefined),
         });
     }
     else {

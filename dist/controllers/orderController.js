@@ -18,7 +18,9 @@ const User_1 = __importDefault(require("../models/User"));
 const Review_1 = __importDefault(require("../models/Review"));
 const PlatformSettings_1 = __importDefault(require("../models/PlatformSettings"));
 const Transaction_1 = __importDefault(require("../models/Transaction"));
+const chat_service_1 = require("../services/chat.service");
 const notification_service_1 = require("../services/notification.service");
+const offer_service_1 = require("../services/offer.service");
 const mongoose_1 = __importDefault(require("mongoose"));
 const getOrders = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -29,6 +31,7 @@ const getOrders = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             .populate('creator', 'username')
             .populate('offer')
             .sort({ createdAt: -1 });
+        console.log(`[OrderController] Found ${orders.length} orders for user. IDs: ${orders.map(o => `${o._id}(paid:${o.paid})`).join(', ')}`);
         res.json(orders);
     }
     catch (error) {
@@ -38,24 +41,30 @@ const getOrders = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
 exports.getOrders = getOrders;
 const getOrderById = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const orderId = req.params.id;
+        const orderId = req.params.id.trim();
+        console.log(`[OrderController] Fetching Order: "${orderId}"`);
+        if (!mongoose_1.default.Types.ObjectId.isValid(orderId)) {
+            console.error(`[OrderController] Invalid Order ID format: ${orderId}`);
+            return res.status(400).json({ message: 'Invalid Order ID format' });
+        }
         const order = yield Order_1.default.findById(orderId)
             .populate('brand', 'username')
             .populate('creator', 'username')
             .populate('offer');
         if (!order) {
-            console.error(`[OrderController] Order not found: ${req.params.id}`);
-            return res.status(404).json({ message: 'Order not found' });
+            console.error(`[OrderController] Order NOT FOUND in DB for ID: ${orderId}`);
+            return res.status(404).json({ message: 'Order reference not found' });
         }
         const userId = (req.user.id || req.user._id).toString();
-        const brandId = order.brand._id.toString();
-        const creatorId = order.creator._id.toString();
+        // Handle both populated and unpopulated cases safely
+        const brandId = (order.brand._id || order.brand).toString();
+        const creatorId = (order.creator._id || order.creator).toString();
+        console.log(`[OrderController] Auth Check - User: ${userId}, Brand: ${brandId}, Creator: ${creatorId}`);
         // Security check
         if (brandId !== userId &&
             creatorId !== userId &&
             req.user.role !== 'admin') {
-            console.warn(`[OrderController] Unauthorized access attempt. User ${userId} (role: ${req.user.role}) tried to access order owned by Brand ${brandId} and Creator ${creatorId}`);
-            return res.status(403).json({ message: 'Not authorized' });
+            return res.status(403).json({ message: 'Not authorized to view this campaign protocol' });
         }
         const formattedOrder = order.toObject();
         if (req.user.role === 'brand') {
@@ -161,30 +170,46 @@ const reviewDeliverable = (req, res) => __awaiter(void 0, void 0, void 0, functi
 exports.reviewDeliverable = reviewDeliverable;
 const createPackageOrder = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { creatorId, packageDetails, price } = req.body;
+        let { creatorId, packageDetails, price } = req.body;
         const userId = req.user._id || req.user.id;
-        const settings = yield PlatformSettings_1.default.findOne();
-        const feePercentage = (settings === null || settings === void 0 ? void 0 : settings.platformFeePercentage) || 15;
-        const platformFee = Number((price * (feePercentage / 100)).toFixed(2));
-        const totalAmount = Number((price + platformFee).toFixed(2));
-        const order = yield Order_1.default.create({
+        // Ensure price is available and is a number
+        if (price === undefined && (packageDetails === null || packageDetails === void 0 ? void 0 : packageDetails.price) !== undefined) {
+            price = packageDetails.price;
+        }
+        const numericPrice = Number(price);
+        if (isNaN(numericPrice) || numericPrice <= 0) {
+            return res.status(400).json({
+                message: "A valid price is required to book a package.",
+                receivedPrice: price
+            });
+        }
+        // 1. Find or Create Chat for Negotiation/Booking
+        const chat = yield chat_service_1.ChatService.findOrCreateNegotiationChat([userId.toString(), creatorId.toString()]);
+        const offer = yield offer_service_1.OfferService.createOffer({
             brand: userId,
             creator: creatorId,
-            price: price,
-            platformFee,
-            totalAmount,
-            status: 'active',
-            paid: false,
-            packageDetails
+            sender: userId,
+            price: numericPrice,
+            deliverables: `Package Booking: ${packageDetails.name}\n${packageDetails.description || ''}`,
+            status: 'pending',
+            packageDetails: packageDetails,
+            chat: chat._id
         });
+        // 3. Add system message to chat
+        yield chat_service_1.ChatService.addSystemMessage(chat._id, userId, "Package Booking Request Sent", offer._id);
         const creatorUser = yield User_1.default.findById(creatorId);
         if (creatorUser) {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            yield notification_service_1.NotificationService.sendOrderCreated(creatorUser.id, creatorUser.email, order.id, 'creator', `${frontendUrl}/dashboard/creator/orders/${order.id}`);
+            yield notification_service_1.NotificationService.sendOfferReceived(creatorUser.id, creatorUser.email, userId.toString(), req.user.username, numericPrice, `${frontendUrl}/dashboard/creator/offers`);
         }
-        res.status(201).json(order);
+        // Return the offer so frontend can redirect to chat
+        res.status(201).json({
+            message: "Booking offer sent to creator",
+            offer: offer
+        });
     }
     catch (error) {
+        console.error("[OrderController] createPackageOrder error:", error);
         res.status(500).json({ message: error.message });
     }
 });

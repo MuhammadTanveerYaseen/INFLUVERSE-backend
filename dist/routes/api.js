@@ -30,6 +30,8 @@ router.use('/payments', paymentRoutes_1.default);
 router.use('/invoices', invoiceRoutes_1.default);
 router.use('/chat', chatRoutes_1.default);
 router.use('/upload', uploadRoutes_1.default);
+const stripeRoutes_1 = __importDefault(require("./stripeRoutes"));
+router.use('/stripe', stripeRoutes_1.default);
 const notificationRoutes_1 = __importDefault(require("./notificationRoutes"));
 router.use('/notifications', notificationRoutes_1.default);
 const reportRoutes_1 = __importDefault(require("./reportRoutes"));

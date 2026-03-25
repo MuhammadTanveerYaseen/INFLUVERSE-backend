@@ -19,6 +19,9 @@ const Offer_1 = __importDefault(require("../models/Offer"));
 const Transaction_1 = __importDefault(require("../models/Transaction"));
 const CreatorProfile_1 = __importDefault(require("../models/CreatorProfile"));
 const PlatformSettings_1 = __importDefault(require("../models/PlatformSettings"));
+const User_1 = __importDefault(require("../models/User"));
+const mongoose_1 = __importDefault(require("mongoose"));
+const notification_service_1 = require("../services/notification.service");
 exports.PaymentController = {
     // 1. Onboard Creator (Get Stripe Connect Link)
     onboardCreator: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -78,27 +81,33 @@ exports.PaymentController = {
     }),
     // 3. Create Payment Intent (Brand pays for Order)
     createOrderPayment: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a, _b;
         try {
-            const { orderId } = req.body;
+            const orderId = (_a = req.body.orderId) === null || _a === void 0 ? void 0 : _a.trim();
+            console.log(`[PaymentController] Payment Intent Request for Order: "${orderId}"`);
             if (!orderId)
                 return res.status(400).json({ message: 'Order ID is required' });
+            if (!mongoose_1.default.Types.ObjectId.isValid(orderId)) {
+                return res.status(400).json({ message: 'Invalid Order ID signature' });
+            }
             const order = yield Order_1.default.findById(orderId);
             if (!order) {
-                console.error(`[PaymentController] Order not found: ${orderId}`);
-                return res.status(404).json({ message: 'Order not found' });
+                console.error(`[PaymentController] Order NOT FOUND in DB: ${orderId}`);
+                return res.status(404).json({ message: 'Payment target order not found' });
             }
             const userId = (req.user.id || req.user._id).toString();
-            const orderBrandId = order.brand.toString();
-            console.log(`[PaymentController] Authorizing payment. User: ${userId}, Order Brand: ${orderBrandId}`);
+            const orderBrandId = ((_b = order.brand._id) === null || _b === void 0 ? void 0 : _b.toString()) || order.brand.toString();
+            console.log(`[PaymentController] Authorizing payment. Requester: ${userId}, Order Owner: ${orderBrandId}`);
             if (orderBrandId !== userId) {
-                console.warn(`[PaymentController] Unauthorized payment attempt. User ${userId} tried to pay for order owned by ${orderBrandId}`);
-                return res.status(403).json({ message: 'Not authorized' });
+                return res.status(403).json({ message: 'Authorization protocol mismatch for payment' });
             }
             const amountToPay = order.totalAmount || order.price || 0;
             if (!amountToPay || isNaN(amountToPay)) {
                 return res.status(400).json({ message: 'Invalid order amount' });
             }
-            const paymentIntent = yield payment_service_1.PaymentService.createPaymentIntent(orderId, amountToPay);
+            const creatorId = order.creator.toString();
+            const platformFee = order.platformFee || 0;
+            const paymentIntent = yield payment_service_1.PaymentService.createPaymentIntent(orderId, amountToPay, creatorId, platformFee);
             res.json({ clientSecret: paymentIntent.client_secret });
         }
         catch (error) {
@@ -110,49 +119,62 @@ exports.PaymentController = {
     confirmPayment: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         try {
             const { paymentIntentId, orderId } = req.body;
-            console.log(`Confirming Payment. Order: ${orderId}, Intent: ${paymentIntentId}`);
+            console.log(`[PaymentController] Confirming Payment for Order: ${orderId}, PI: ${paymentIntentId}`);
+            require('fs').appendFileSync('payment_trace.log', `${new Date().toISOString()} - Confirming ${orderId}\n`);
+            if (!orderId) {
+                console.error("[PaymentController] Order ID missing in confirmation request");
+                return res.status(400).json({ message: "Order ID missing" });
+            }
             const order = yield Order_1.default.findById(orderId);
-            if (!order)
+            if (!order) {
+                console.error(`[PaymentController] Order ${orderId} NOT FOUND during confirmation`);
                 return res.status(404).json({ message: 'Order not found' });
+            }
+            console.log(`[PaymentController] Current Order Status: ${order.status}, Paid: ${order.paid}`);
             const offer = yield Offer_1.default.findById(order.offer);
-            const now = new Date();
-            let newDeadline = new Date(now);
-            if (offer && offer.durationDays) {
-                newDeadline.setDate(now.getDate() + offer.durationDays);
+            if (!offer) {
+                console.warn(`[PaymentController] No offer found for order ${orderId}`);
             }
-            else if (order.deadline) {
-                if (new Date(order.deadline) < now) {
-                    newDeadline.setDate(now.getDate() + 3);
-                }
-                else {
-                    newDeadline = new Date(order.deadline);
-                }
-            }
-            else {
-                newDeadline.setDate(now.getDate() + 3);
-            }
+            console.log(`[PaymentController] Updating order ${orderId} to active/paid.`);
             order.status = 'active';
             order.paid = true;
             order.paymentIntentId = paymentIntentId;
-            order.deadline = newDeadline;
             const updatedOrder = yield order.save();
+            console.log(`[PaymentController] Order ${orderId} updated successfully.`);
             if (offer) {
                 offer.status = 'accepted';
+                offer.paid = true;
                 yield offer.save();
+                console.log(`[PaymentController] Offer ${offer._id} status synced to accepted and paid.`);
             }
             const creatorEarningCents = Math.round(order.price * 100);
+            console.log(`[PaymentController] Creating transaction for creator ${order.creator}. Amount: ${creatorEarningCents}`);
             yield Transaction_1.default.create({
                 user: order.creator,
+                order: order._id,
                 type: 'earning',
                 amount: creatorEarningCents,
-                currency: 'usd',
+                currency: 'eur',
                 status: 'pending',
                 description: `Earning from Order #${orderId}`,
             });
+            console.log("[PaymentController] Transaction created. Sending notifications...");
+            // Notify Creator
+            const creatorUser = yield User_1.default.findById(order.creator);
+            if (creatorUser) {
+                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                yield notification_service_1.NotificationService.sendPaymentConfirmed(creatorUser.id, creatorUser.email, order.id, `${frontendUrl}/dashboard/creator/orders/${order.id}`, false);
+            }
+            // Notify Brand
+            const brandUser = yield User_1.default.findById(order.brand);
+            if (brandUser) {
+                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                yield notification_service_1.NotificationService.sendPaymentConfirmed(brandUser.id, brandUser.email, order.id, `${frontendUrl}/dashboard/brand/orders/${order.id}`, true);
+            }
             res.json({ success: true, order: updatedOrder });
         }
         catch (error) {
-            console.error("Confirmation Error:", error);
+            console.error("[PaymentController] Confirmation CRITICAL Error:", error);
             res.status(500).json({ message: error.message });
         }
     }),
@@ -189,7 +211,7 @@ exports.PaymentController = {
                 user: userId,
                 type: 'payout',
                 amount: -requestCents,
-                currency: 'usd',
+                currency: 'eur',
                 status: status,
                 description: description,
             });

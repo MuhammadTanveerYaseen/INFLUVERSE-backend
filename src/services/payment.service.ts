@@ -50,10 +50,32 @@ export class PaymentService {
         return accountLink.url;
     }
 
-    // 2. Create Payment Intent for Brand (Pay for Order)
-    static async createPaymentIntent(orderId: string, amount: number) {
-        // amount in dollars, convert to cents
+    // 2. Create Payment Intent for Brand (Pay for Order) with Destination Charge
+    static async createPaymentIntent(orderId: string, amount: number, creatorId: string, platformFee: number) {
+        // amount in eur, convert to cents
         const amountInCents = Math.round(amount * 100);
+        const applicationFeeInCents = Math.round(platformFee * 100);
+
+        const profile = await CreatorProfile.findOne({ user: creatorId });
+        if (!profile) throw new Error('Creator profile not found.');
+
+        let connectId = profile.stripeConnectId;
+        if (!connectId) {
+            const creatorUser = await require('../models/User').default.findById(creatorId);
+            const account = await stripe.accounts.create({
+                type: 'express',
+                country: profile.country || 'US',
+                email: creatorUser?.email || '',
+                capabilities: {
+                    card_payments: { requested: true },
+                    transfers: { requested: true },
+                },
+            });
+            connectId = account.id;
+            profile.stripeConnectId = connectId;
+            (profile as any).payoutsEnabled = false;
+            await profile.save();
+        }
 
         const paymentIntent = await stripe.paymentIntents.create({
             amount: amountInCents,
@@ -62,6 +84,10 @@ export class PaymentService {
             automatic_payment_methods: {
                 enabled: true,
             },
+            transfer_data: {
+                destination: connectId as string,
+            },
+            application_fee_amount: applicationFeeInCents,
         });
 
         return paymentIntent;

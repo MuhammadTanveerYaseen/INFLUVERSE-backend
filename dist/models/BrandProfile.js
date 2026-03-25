@@ -56,7 +56,8 @@ const brandProfileSchema = new mongoose_1.Schema({
         zip: { type: String },
         country: { type: String },
         taxId: { type: String }
-    }
+    },
+    savedCreators: [{ type: mongoose_1.default.Schema.Types.ObjectId, ref: 'User' }]
 }, {
     timestamps: true
 });

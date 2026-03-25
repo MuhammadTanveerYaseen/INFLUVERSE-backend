@@ -30,6 +30,9 @@ router.use('/invoices', invoiceRoutes);
 router.use('/chat', chatRoutes);
 router.use('/upload', uploadRoutes);
 
+import stripeRoutes from './stripeRoutes';
+router.use('/stripe', stripeRoutes);
+
 import notificationRoutes from './notificationRoutes';
 router.use('/notifications', notificationRoutes);
 

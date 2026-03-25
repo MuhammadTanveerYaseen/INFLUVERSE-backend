@@ -1,9 +1,20 @@
 import { Request, Response } from 'express';
 import CRMItem from '../models/CRMItem';
 
+let crmCache = {
+    data: null as any,
+    lastUpdate: 0
+};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export const getCRMItems = async (req: Request, res: Response) => {
     try {
-        const items = await CRMItem.find().sort({ createdAt: -1 });
+        const now = Date.now();
+        if (crmCache.data && (now - crmCache.lastUpdate < CACHE_TTL)) {
+            return res.status(200).json(crmCache.data);
+        }
+
+        const items = await CRMItem.find().sort({ createdAt: -1 }).limit(500).lean();
 
         const mappedItems = items.map(crmItem => ({
             _id: crmItem._id,
@@ -22,6 +33,9 @@ export const getCRMItems = async (req: Request, res: Response) => {
             comments: crmItem.comments
         }));
 
+        crmCache.data = mappedItems;
+        crmCache.lastUpdate = Date.now();
+
         res.status(200).json(mappedItems);
     } catch (error) {
         console.error('Error fetching CRM pipeline data:', error);
@@ -32,6 +46,8 @@ export const getCRMItems = async (req: Request, res: Response) => {
 export const createCRMItem = async (req: Request, res: Response) => {
     try {
         const newItem = await CRMItem.create(req.body);
+        
+        crmCache.data = null; // Invalidate cache
 
         res.status(201).json(newItem);
     } catch (error: any) {
@@ -65,6 +81,8 @@ export const updateCRMItem = async (req: Request, res: Response) => {
 
         await CRMItem.findByIdAndUpdate(id, updateData, { new: true });
 
+        crmCache.data = null; // Invalidate cache
+
         res.status(200).json({ message: 'CRM pipeline updated.' });
     } catch (error) {
         console.error('Error updating CRM pipeline data:', error);
@@ -79,6 +97,7 @@ export const deleteCRMItem = async (req: Request, res: Response) => {
         const crmItem = await CRMItem.findById(id);
         if (crmItem) {
             await CRMItem.findByIdAndDelete(id);
+            crmCache.data = null; // Invalidate cache
             res.status(200).json({ message: 'CRM item deleted.' });
         } else {
             res.status(404).json({ message: 'Item not found' });

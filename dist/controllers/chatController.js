@@ -45,7 +45,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUserChats = exports.getMessages = exports.sendMessage = exports.startChat = void 0;
+exports.getUserChats = exports.getMessages = exports.checkBlockStatus = exports.toggleBlockUser = exports.deleteChat = exports.clearChat = exports.sendMessage = exports.startChat = void 0;
 const Chat_1 = __importDefault(require("../models/Chat"));
 const Message_1 = __importDefault(require("../models/Message"));
 const Order_1 = __importDefault(require("../models/Order"));
@@ -140,6 +140,23 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
                 return res.status(403).json({ message: 'Account suspended due to spamming.' });
             }
         }
+        // Check for block status before creating message
+        const otherParticipantId = chat.participants.find(p => p.toString() !== userId);
+        if (otherParticipantId) {
+            const recipient = yield User_1.default.findById(otherParticipantId);
+            if (recipient && recipient.blockedUsers.some(id => id.toString() === userId)) {
+                console.log(`[Chat] Blocking message: recipient ${otherParticipantId} has blocked sender ${userId}`);
+                return res.status(403).json({ message: 'You have been blocked by this user.' });
+            }
+            const sender = yield User_1.default.findById(userId);
+            if (sender && sender.blockedUsers.some(id => id.toString() === otherParticipantId.toString())) {
+                console.log(`[Chat] Blocking message: sender ${userId} has blocked recipient ${otherParticipantId}`);
+                return res.status(403).json({ message: 'You have blocked this user. Unblock them to send messages.' });
+            }
+        }
+        const lastMessageInChat = yield Message_1.default.findOne({ chat: chatId }).sort({ createdAt: -1 });
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const shouldSendEmail = !lastMessageInChat || lastMessageInChat.createdAt < twentyFourHoursAgo;
         const message = yield Message_1.default.create({
             chat: chatId,
             sender: userId,
@@ -158,6 +175,22 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             });
             (0, socket_service_1.emitToUser)(participantId.toString(), 'refresh_chats', {});
         });
+        if (shouldSendEmail && otherParticipantId) {
+            try {
+                const recipientUser = yield User_1.default.findById(otherParticipantId);
+                const senderUser = yield User_1.default.findById(userId);
+                if (recipientUser && senderUser) {
+                    const { sendEmail, emailTemplates } = require('../utils/emailService');
+                    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                    const link = `${frontendUrl}/dashboard/${recipientUser.role}/messages/${chatId}`;
+                    yield sendEmail(recipientUser.email, `New message from ${senderUser.username}`, emailTemplates.newMessage(senderUser.username, link, 'en') // Assume 'en' as default
+                    );
+                }
+            }
+            catch (err) {
+                console.error('[Chat] Failed to send new message email:', err);
+            }
+        }
         res.status(201).json(populatedMessage);
     }
     catch (error) {
@@ -165,6 +198,99 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     }
 });
 exports.sendMessage = sendMessage;
+// @desc    Clear all messages in a chat
+const clearChat = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { chatId } = req.params;
+        const userId = (req.user._id || req.user.id).toString();
+        const chat = yield Chat_1.default.findById(chatId);
+        if (!chat)
+            return res.status(404).json({ message: 'Chat not found' });
+        const isParticipant = chat.participants.some(p => p.toString() === userId);
+        if (!isParticipant && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+        yield Message_1.default.deleteMany({ chat: chatId });
+        chat.participants.forEach((participantId) => {
+            (0, socket_service_1.emitToUser)(participantId.toString(), 'chat_cleared', { chatId });
+        });
+        res.json({ message: 'Chat cleared successfully' });
+    }
+    catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+exports.clearChat = clearChat;
+// @desc    Delete a chat and its messages
+const deleteChat = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { chatId } = req.params;
+        const userId = (req.user._id || req.user.id).toString();
+        const chat = yield Chat_1.default.findById(chatId);
+        if (!chat)
+            return res.status(404).json({ message: 'Chat not found' });
+        const isParticipant = chat.participants.some(p => p.toString() === userId);
+        if (!isParticipant && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+        yield Message_1.default.deleteMany({ chat: chatId });
+        yield chat.deleteOne();
+        chat.participants.forEach((participantId) => {
+            (0, socket_service_1.emitToUser)(participantId.toString(), 'chat_deleted', { chatId });
+        });
+        res.json({ message: 'Chat deleted successfully' });
+    }
+    catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+exports.deleteChat = deleteChat;
+// @desc    Block/Unblock a user
+const toggleBlockUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { targetUserId } = req.body;
+        const userId = (req.user._id || req.user.id).toString();
+        if (targetUserId === userId) {
+            return res.status(400).json({ message: 'You cannot block yourself' });
+        }
+        const user = yield User_1.default.findById(userId);
+        if (!user)
+            return res.status(404).json({ message: 'User not found' });
+        const isBlocked = user.blockedUsers.some(id => id.toString() === targetUserId);
+        if (isBlocked) {
+            user.blockedUsers = user.blockedUsers.filter(id => id.toString() !== targetUserId);
+            yield user.save();
+            res.json({ message: 'User unblocked', isBlocked: false });
+        }
+        else {
+            user.blockedUsers.push(targetUserId);
+            yield user.save();
+            res.json({ message: 'User blocked', isBlocked: true });
+        }
+    }
+    catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+exports.toggleBlockUser = toggleBlockUser;
+// @desc    Check if a user is blocked
+const checkBlockStatus = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { targetUserId } = req.params;
+        const userId = (req.user._id || req.user.id).toString();
+        const user = yield User_1.default.findById(userId);
+        if (!user)
+            return res.status(404).json({ message: 'User not found' });
+        const isBlocked = user.blockedUsers.some(id => id.toString() === targetUserId);
+        const targetUser = yield User_1.default.findById(targetUserId);
+        const amIBlocked = (targetUser === null || targetUser === void 0 ? void 0 : targetUser.blockedUsers.some(id => id.toString() === userId)) || false;
+        res.json({ isBlocked, amIBlocked });
+    }
+    catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+exports.checkBlockStatus = checkBlockStatus;
 // @desc    Get Messages & Mark as Read
 const getMessages = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {

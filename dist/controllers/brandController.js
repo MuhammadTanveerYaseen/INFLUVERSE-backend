@@ -12,17 +12,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getBrandDashboardStats = exports.updateBrandProfile = exports.getBrandProfile = exports.registerBrand = void 0;
+exports.getFavoriteCreators = exports.toggleFavoriteCreator = exports.getBrandDashboardStats = exports.updateBrandProfile = exports.getBrandProfile = exports.registerBrand = void 0;
 const User_1 = __importDefault(require("../models/User"));
 const BrandProfile_1 = __importDefault(require("../models/BrandProfile"));
 const Order_1 = __importDefault(require("../models/Order"));
 const Offer_1 = __importDefault(require("../models/Offer"));
+const CreatorProfile_1 = __importDefault(require("../models/CreatorProfile"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const emailService_1 = require("../utils/emailService");
 const mongoose_1 = __importDefault(require("mongoose"));
-const generateToken = (id, role, username, email, status, isVerified, rejectionReason) => {
-    return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, rejectionReason }, process.env.JWT_SECRET || 'secret', {
+const generateToken = (id, role, username, email, status, isVerified, name, rejectionReason) => {
+    return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '30d',
     });
 };
@@ -41,6 +42,7 @@ const registerBrand = (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const user = yield User_1.default.create({
+        name: username,
         username,
         email,
         password,
@@ -84,6 +86,7 @@ const getBrandProfile = (req, res) => __awaiter(void 0, void 0, void 0, function
         const profile = yield BrandProfile_1.default.findOne({ user: user._id });
         res.json({
             _id: user._id,
+            name: user.name,
             username: user.username,
             email: user.email,
             role: user.role,
@@ -106,6 +109,8 @@ const updateBrandProfile = (req, res) => __awaiter(void 0, void 0, void 0, funct
             user.username = req.body.username;
         if (req.body.email)
             user.email = req.body.email;
+        if (req.body.name)
+            user.name = req.body.name;
         if (req.body.password) {
             user.password = req.body.password;
         }
@@ -124,10 +129,11 @@ const updateBrandProfile = (req, res) => __awaiter(void 0, void 0, void 0, funct
         }
         res.json({
             _id: updatedUser._id,
+            name: updatedUser.name,
             username: updatedUser.username,
             email: updatedUser.email,
             role: updatedUser.role,
-            token: generateToken(updatedUser._id.toString(), updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.rejectionReason),
+            token: generateToken(updatedUser._id.toString(), updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason),
             profileData: updatedProfile
         });
     }
@@ -251,3 +257,80 @@ const getBrandDashboardStats = (req, res) => __awaiter(void 0, void 0, void 0, f
     }
 });
 exports.getBrandDashboardStats = getBrandDashboardStats;
+// @desc    Toggle favorite on a creator
+// @route   POST /api/brands/favorites/:creatorId
+// @access  Private (Brand)
+const toggleFavoriteCreator = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const brandId = req.user._id || req.user.id;
+        const creatorId = req.params.creatorId;
+        console.log(`[ToggleFavorite] brandId: ${brandId}, creatorId: ${creatorId}`);
+        let profile = yield BrandProfile_1.default.findOne({ user: brandId });
+        if (!profile) {
+            profile = yield BrandProfile_1.default.create({
+                user: brandId,
+                companyName: req.user.username || 'My Company',
+                savedCreators: []
+            });
+        }
+        if (!profile.savedCreators) {
+            profile.savedCreators = [];
+        }
+        const creatorIdObj = new mongoose_1.default.Types.ObjectId(creatorId);
+        const creatorIndex = profile.savedCreators.findIndex(id => id && id.toString() === creatorId);
+        let isFavorited = false;
+        if (creatorIndex !== -1) {
+            // Remove from favorites
+            profile.savedCreators.splice(creatorIndex, 1);
+            isFavorited = false;
+        }
+        else {
+            // Add to favorites
+            profile.savedCreators.push(creatorIdObj);
+            isFavorited = true;
+        }
+        // Mark as modified if Mongoose doesn't detect it automatically (though it usually does for arrays)
+        profile.markModified('savedCreators');
+        yield profile.save();
+        res.json({
+            message: isFavorited ? 'Creator favorited' : 'Creator unfavorited',
+            isFavorited,
+            // Serialize ObjectIds to plain strings so frontend can reliably compare
+            savedCreators: profile.savedCreators.map(id => id.toString())
+        });
+    }
+    catch (error) {
+        console.error("Favorite Creator Error:", error);
+        res.status(500).json({ message: "Failed to toggle favorite creator" });
+    }
+});
+exports.toggleFavoriteCreator = toggleFavoriteCreator;
+// @desc    Get favorite creators
+// @route   GET /api/brands/favorites
+// @access  Private (Brand)
+const getFavoriteCreators = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const brandId = req.user._id || req.user.id;
+        const profile = yield BrandProfile_1.default.findOne({ user: brandId });
+        if (!profile) {
+            // Instead of 404, just return empty list as they haven't saved anything and profile is lazy-created
+            return res.json([]);
+        }
+        const savedCreatorIds = profile.savedCreators || [];
+        if (savedCreatorIds.length === 0) {
+            return res.json([]);
+        }
+        // Find all their profiles, populate the user field
+        const creators = yield CreatorProfile_1.default.find({
+            user: { $in: savedCreatorIds }
+        }).populate('user', 'username email isVerified status');
+        // Filter out any creators where populating the user failed (e.g. user was deleted)
+        const validCreators = creators.filter(c => c.user);
+        res.json(validCreators);
+    }
+    catch (error) {
+        console.error("Get Favorite Creators Error:", error);
+        res.status(500).json({ message: "Failed to fetch favorite creators" });
+    }
+});
+exports.getFavoriteCreators = getFavoriteCreators;

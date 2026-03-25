@@ -35,10 +35,14 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const crmItemSchema = new mongoose_1.Schema({
-    type: { type: String, default: 'Creator' },
-    name: { type: String, default: '' },
-    email: { type: String, default: '' },
+    type: { type: String, default: '' },
     platform: { type: String, default: '' },
+    category: { type: String, default: '' },
+    name: { type: String, default: '' },
+    channelUrl: { type: String, default: '' },
+    channelId: { type: String, default: '' },
+    email: { type: String, default: '' },
+    follower: { type: String, default: '' },
     phase: {
         type: String,
         enum: ['potential', 'outreached', 'interested', 'not_interested', 'on_hold', 'onboarded'],

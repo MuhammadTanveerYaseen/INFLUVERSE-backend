@@ -18,68 +18,70 @@ const offer_service_1 = require("../services/offer.service");
 const chat_service_1 = require("../services/chat.service");
 const order_service_1 = require("../services/order.service");
 const notification_service_1 = require("../services/notification.service");
+const mongoose_1 = __importDefault(require("mongoose"));
 const createOffer = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { creatorId, price, deliverables, deadline, usageRights, chatId } = req.body;
-        const brandId = (req.user._id || req.user.id).toString();
-        let targetCreatorId = creatorId;
-        if (!targetCreatorId && chatId) {
+        const { creatorId, targetId, price, deliverables, usageRights, chatId } = req.body;
+        const senderId = (req.user._id || req.user.id).toString();
+        const role = req.user.role;
+        let finalTargetId = targetId || creatorId;
+        if (!finalTargetId && chatId) {
             const existingChat = yield chat_service_1.ChatService.getChatById(chatId);
             if (existingChat) {
-                // Find the participant that is NOT the sender (brand)
+                // Find the participant that is NOT the sender
                 const otherParticipant = existingChat.participants.find((p) => {
                     const savedId = p._id || p;
-                    return savedId.toString() !== brandId;
+                    return savedId.toString() !== senderId;
                 });
                 if (otherParticipant) {
                     const participantId = otherParticipant._id || otherParticipant;
-                    targetCreatorId = participantId.toString();
+                    finalTargetId = participantId.toString();
                 }
             }
         }
-        if (!targetCreatorId) {
-            return res.status(400).json({ message: "Creator ID is required. Could not infer from chat." });
+        if (!finalTargetId) {
+            return res.status(400).json({ message: "Target user ID is required. Could not infer from chat." });
         }
-        if (targetCreatorId === brandId)
+        if (finalTargetId === senderId)
             return res.status(400).json({ message: "You cannot make an offer to yourself" });
-        const creatorUser = yield User_1.default.findById(targetCreatorId);
+        const targetUser = yield User_1.default.findById(finalTargetId);
+        if (!targetUser) {
+            return res.status(404).json({ message: "Target user not found" });
+        }
+        let brandId, creatorIdLocal;
+        if (role === 'brand') {
+            brandId = senderId;
+            creatorIdLocal = finalTargetId;
+        }
+        else {
+            creatorIdLocal = senderId;
+            brandId = finalTargetId;
+        }
         // 1. Find or Create Chat
         let chat;
         if (chatId) {
             chat = yield chat_service_1.ChatService.getChatById(chatId);
         }
         if (!chat) {
-            chat = yield chat_service_1.ChatService.findOrCreateNegotiationChat([brandId, targetCreatorId]);
-        }
-        // 2. Create Offer
-        const start = new Date();
-        const end = new Date(deadline);
-        let diffDays = 3; // Default
-        if (!isNaN(end.getTime())) {
-            const diffTime = end.getTime() - start.getTime();
-            if (diffTime > 0) {
-                const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (days > 0)
-                    diffDays = days;
-            }
+            chat = yield chat_service_1.ChatService.findOrCreateNegotiationChat([brandId, creatorIdLocal]);
         }
         const offer = yield offer_service_1.OfferService.createOffer({
             brand: brandId,
-            creator: targetCreatorId,
+            creator: creatorIdLocal,
+            sender: senderId,
             price: Number(price),
             deliverables,
-            deadline,
-            durationDays: diffDays,
             usageRights,
             chat: chat._id
         });
         // 3. Create System Message for Offer
-        yield chat_service_1.ChatService.addSystemMessage(chat._id, brandId, "Offer Created", offer._id);
-        const brandUser = req.user;
-        if (creatorUser) {
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            yield notification_service_1.NotificationService.sendOfferReceived(creatorUser.id, creatorUser.email, brandId, brandUser.username, Number(price), `${frontendUrl}/dashboard/creator/offers`);
-        }
+        yield chat_service_1.ChatService.addSystemMessage(chat._id, senderId, "Offer Created", offer._id);
+        const senderUser = req.user;
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const targetDashboardUrl = targetUser.role === 'brand'
+            ? `${frontendUrl}/dashboard/brand/offers`
+            : `${frontendUrl}/dashboard/creator/offers`;
+        yield notification_service_1.NotificationService.sendOfferReceived(targetUser.id, targetUser.email, senderId, senderUser.username, Number(price), targetDashboardUrl);
         res.status(201).json(offer);
     }
     catch (error) {
@@ -108,33 +110,54 @@ const respondToOffer = (req, res) => __awaiter(void 0, void 0, void 0, function*
         if (!offer) {
             return res.status(404).json({ message: 'Offer not found' });
         }
+        const recipientId = offer.sender
+            ? (offer.sender.toString() === offer.brand.toString() ? offer.creator : offer.brand)
+            : offer.creator;
         // Authorization Check
-        if (offer.creator.toString() !== userId) {
-            console.warn(`[OfferController] Unauthorized response attempt. User ${userId} tried to respond to offer intended for Creator ${offer.creator}`);
+        if (recipientId.toString() !== userId) {
+            console.warn(`[OfferController] Unauthorized response attempt. User ${userId} tried to respond to offer intended for ${recipientId}`);
             return res.status(403).json({ message: 'Not authorized' });
         }
         // Update Status via Service
         const updatedOffer = yield offer_service_1.OfferService.updateOfferStatus(req.params.id, status, status === 'countered' ? { price: Number(counterPrice), message: counterMessage } : undefined);
+        const originalSenderId = offer.sender ? offer.sender.toString() : offer.brand.toString();
+        const originalSenderUser = yield User_1.default.findById(originalSenderId);
+        const responderUser = req.user;
         // Use the updated status for logic
         if (status === 'accepted') {
-            const order = yield order_service_1.OrderService.createFromOffer(updatedOffer);
-            // Notify Brand of Order Creation
-            const brandUser = yield User_1.default.findById(updatedOffer.brand);
-            const creatorUser = req.user;
-            if (brandUser) {
+            // Check if order already exists to prevent duplicates and handle manual repairs
+            const Order = mongoose_1.default.model('Order');
+            const existingOrder = yield Order.findOne({ offer: updatedOffer._id });
+            let order;
+            if (existingOrder) {
+                console.log(`[OfferController] Offer ${req.params.id} already has an order: ${existingOrder._id}`);
+                order = existingOrder;
+            }
+            else {
+                console.log(`[OfferController] Offer ${req.params.id} accepted. Creating order...`);
+                order = yield order_service_1.OrderService.createFromOffer(updatedOffer);
+                console.log(`[OfferController] Order created: ${order._id}`);
+            }
+            // Link the created order to the offer
+            updatedOffer.order = order._id;
+            yield updatedOffer.save();
+            if (originalSenderUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                yield notification_service_1.NotificationService.sendOfferStatusUpdate(brandUser.id, brandUser.email, userId, creatorUser.username, 'accepted', `${frontendUrl}/dashboard/brand/orders`);
-                yield notification_service_1.NotificationService.sendOrderCreated(brandUser.id, brandUser.email, order._id.toString(), 'brand', `${frontendUrl}/dashboard/brand/orders/${order._id}`);
+                const dashboardRole = originalSenderUser.role === 'brand' ? 'brand' : 'creator';
+                yield notification_service_1.NotificationService.sendOfferStatusUpdate(originalSenderUser.id, originalSenderUser.email, userId, responderUser.username, 'accepted', `${frontendUrl}/dashboard/brand/orders`);
+                // Add a specific payment notification for brands
+                if (originalSenderUser.role === 'brand') {
+                    yield notification_service_1.NotificationService.sendPaymentRequired(originalSenderUser.id, originalSenderUser.email, order._id.toString(), `${frontendUrl}/dashboard/brand/checkout/${order._id}`);
+                }
             }
             return res.json({ message: 'Offer accepted, Order created', orderId: order._id });
         }
         else {
-            // Notify Brand of Rejection/Counter
-            const brandUser = yield User_1.default.findById(offer.brand);
-            const creatorUser = req.user;
-            if (brandUser) {
+            // Notify original sender of Rejection/Counter
+            if (originalSenderUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                yield notification_service_1.NotificationService.sendOfferStatusUpdate(brandUser.id, brandUser.email, userId, creatorUser.username, status, `${frontendUrl}/dashboard/brand/offers`);
+                const dashboardRole = originalSenderUser.role === 'brand' ? 'brand' : 'creator';
+                yield notification_service_1.NotificationService.sendOfferStatusUpdate(originalSenderUser.id, originalSenderUser.email, userId, responderUser.username, status, `${frontendUrl}/dashboard/${dashboardRole}/offers`);
             }
         }
         // Return updated offer

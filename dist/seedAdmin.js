@@ -25,6 +25,7 @@ const seedAdmin = () => __awaiter(void 0, void 0, void 0, function* () {
             process.exit();
         }
         const admin = yield User_1.default.create({
+            name: 'System Administrator',
             username: 'admin',
             email: 'admin@influverse.com',
             password: 'adminpassword123',

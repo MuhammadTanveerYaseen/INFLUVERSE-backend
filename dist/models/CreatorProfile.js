@@ -43,7 +43,6 @@ const packageSchema = new mongoose_1.Schema({
     name: { type: String, required: true }, // e.g., 'Basic', 'Standard'
     price: { type: Number, required: true },
     description: { type: String }, // Describes deliverables
-    deliveryDays: { type: Number, default: 3 },
     revisions: { type: Number, default: 1 },
     features: [String],
     addOns: [addOnSchema]
@@ -80,6 +79,7 @@ const creatorProfileSchema = new mongoose_1.Schema({
         reviewCount: { type: Number, default: 0 }
     },
     verified: { type: Boolean, default: false },
+    isFeatured: { type: Boolean, default: false },
     availability: {
         type: String,
         enum: ['available', 'busy', 'offline'],

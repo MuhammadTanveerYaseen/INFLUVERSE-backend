@@ -26,6 +26,11 @@ app.use(cors({
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
+import { StripeController } from './controllers/stripeController';
+
+// Parse raw body for Stripe webhook BEFORE JSON parser
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), StripeController.webhook);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
