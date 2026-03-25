@@ -6,6 +6,7 @@ import PlatformSettings from '../models/PlatformSettings';
 import User from '../models/User';
 import Offer from '../models/Offer';
 import { emitToUser } from '../services/socket.service';
+import redisClient from '../config/redis';
 
 // Helper to filter sensitive info
 const filterMessageContent = (content: string): string => {
@@ -167,6 +168,12 @@ export const sendMessage = async (req: Request | any, res: Response) => {
             }
         }
 
+        if (redisClient.isReady) {
+            chat.participants.forEach((participantId: any) => {
+                redisClient.del(`chats_${participantId.toString()}`);
+            });
+        }
+
         res.status(201).json(populatedMessage);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -191,6 +198,12 @@ export const clearChat = async (req: Request | any, res: Response) => {
         chat.participants.forEach((participantId: any) => {
             emitToUser(participantId.toString(), 'chat_cleared', { chatId });
         });
+
+        if (redisClient.isReady) {
+            chat.participants.forEach((participantId: any) => {
+                redisClient.del(`chats_${participantId.toString()}`);
+            });
+        }
 
         res.json({ message: 'Chat cleared successfully' });
     } catch (error: any) {
@@ -218,6 +231,12 @@ export const deleteChat = async (req: Request | any, res: Response) => {
         chat.participants.forEach((participantId: any) => {
             emitToUser(participantId.toString(), 'chat_deleted', { chatId });
         });
+
+        if (redisClient.isReady) {
+            chat.participants.forEach((participantId: any) => {
+                redisClient.del(`chats_${participantId.toString()}`);
+            });
+        }
 
         res.json({ message: 'Chat deleted successfully' });
     } catch (error: any) {
@@ -307,6 +326,9 @@ export const getMessages = async (req: Request | any, res: Response) => {
                 { _id: { $in: unreadIds } },
                 { $addToSet: { readBy: userId } }
             );
+            if (redisClient.isReady) {
+                await redisClient.del(`chats_${userId}`);
+            }
         }
 
         res.json(messages);
@@ -321,6 +343,14 @@ export const getUserChats = async (req: Request | any, res: Response) => {
     try {
         const { isUserOnline } = await import('../services/socket.service');
         const userId = (req.user._id || req.user.id).toString();
+
+        const CACHE_KEY = `chats_${userId}`;
+        if (redisClient.isReady) {
+            const cachedData = await redisClient.get(CACHE_KEY);
+            if (cachedData) {
+                return res.status(200).json(JSON.parse(cachedData));
+            }
+        }
 
         const chats = await Chat.find({ participants: userId })
             .populate('participants', 'username')
@@ -352,6 +382,10 @@ export const getUserChats = async (req: Request | any, res: Response) => {
                 participants: participantsData,
             };
         }));
+
+        if (redisClient.isReady) {
+            await redisClient.setEx(CACHE_KEY, 120, JSON.stringify(chatsWithDetails));
+        }
 
         res.json(chatsWithDetails);
     } catch (error: any) {

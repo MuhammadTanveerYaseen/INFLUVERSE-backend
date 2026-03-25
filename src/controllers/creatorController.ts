@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { sendEmail, emailTemplates } from '../utils/emailService';
 import mongoose from 'mongoose';
+import redisClient from '../config/redis';
 
 const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, name?: string, rejectionReason?: string) => {
     return jwt.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
@@ -154,6 +155,15 @@ export const updateCreatorProfile = async (req: Request | any, res: Response) =>
 export const getCreators = async (req: Request, res: Response) => {
     try {
         const { category, country, featured } = req.query;
+        
+        const CACHE_KEY = `creators_${category || 'all'}_${country || 'all'}_${featured || 'false'}`;
+        
+        if (redisClient.isReady) {
+            const cachedData = await redisClient.get(CACHE_KEY);
+            if (cachedData) {
+                return res.status(200).json(JSON.parse(cachedData));
+            }
+        }
 
         let query: any = {};
 
@@ -173,6 +183,10 @@ export const getCreators = async (req: Request, res: Response) => {
         const validCreators = creatorsList.filter(c => 
             c.user && (c.user as any).status === 'active'
         );
+
+        if (redisClient.isReady) {
+            await redisClient.setEx(CACHE_KEY, 300, JSON.stringify(validCreators));
+        }
 
         res.json(validCreators);
     } catch (error: any) {
