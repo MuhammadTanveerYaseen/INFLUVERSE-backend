@@ -136,10 +136,11 @@ const reviewDeliverable = (req, res) => __awaiter(void 0, void 0, void 0, functi
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
                 yield notification_service_1.NotificationService.sendOrderApproved(creatorUser.id, creatorUser.email, userId, order.id, `${frontendUrl}/dashboard/creator/orders/${order.id}`);
             }
+            // Start the 7-day Escrow Release Clock
             yield Transaction_1.default.updateMany({
                 user: order.creator,
+                order: order._id,
                 type: 'earning',
-                description: { $regex: order.id, $options: 'i' },
                 status: 'pending'
             }, { availableAt: payoutDate });
         }

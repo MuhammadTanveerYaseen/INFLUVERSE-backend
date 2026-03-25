@@ -158,11 +158,12 @@ export const reviewDeliverable = async (req: Request | any, res: Response) => {
                 );
             }
 
+            // Start the 7-day Escrow Release Clock
             await Transaction.updateMany(
                 {
                     user: order.creator,
+                    order: order._id,
                     type: 'earning',
-                    description: { $regex: order.id, $options: 'i' },
                     status: 'pending'
                 },
                 { availableAt: payoutDate }

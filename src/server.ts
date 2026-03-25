@@ -8,6 +8,7 @@ import connectDB from './config/db';
 import { connectRedis } from './config/redis';
 import apiRoutes from './routes/api';
 import { initSocket } from './services/socket.service';
+import Transaction from './models/Transaction';
 
 const app: Express = express();
 const httpServer = createServer(app);
@@ -38,6 +39,23 @@ app.use(express.urlencoded({ extended: true }));
 // Database Connection
 connectDB();
 connectRedis();
+
+// Automated Escrow Release Job: Runs every 60 minutes to unlock 7-day holds
+setInterval(async () => {
+    try {
+        const now = new Date();
+        // Finds transactions where 7-day rule (availableAt) has been met
+        const released = await Transaction.updateMany(
+            { status: 'pending', type: 'earning', availableAt: { $lte: now } },
+            { status: 'available' }
+        );
+        if (released.modifiedCount > 0) {
+            console.log(`[Escrow Cron] Auto-released ${released.modifiedCount} funds to creators after 7-day hold.`);
+        }
+    } catch (err: any) {
+        console.error(`[Escrow Cron Error] Failed to scan transactions:`, err.message);
+    }
+}, 3600000); // 60 minutes
 
 // Routes
 app.use('/api', apiRoutes);

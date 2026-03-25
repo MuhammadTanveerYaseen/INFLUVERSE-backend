@@ -18,7 +18,6 @@ const Order_1 = __importDefault(require("../models/Order"));
 const Offer_1 = __importDefault(require("../models/Offer"));
 const Transaction_1 = __importDefault(require("../models/Transaction"));
 const CreatorProfile_1 = __importDefault(require("../models/CreatorProfile"));
-const PlatformSettings_1 = __importDefault(require("../models/PlatformSettings"));
 const User_1 = __importDefault(require("../models/User"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const notification_service_1 = require("../services/notification.service");
@@ -200,6 +199,11 @@ exports.PaymentController = {
             let status = 'processing';
             let description = 'Withdrawal Request (Bank Transfer)';
             if (hasStripe) {
+                // Verify the dashboard capabilities are actually active
+                const stripeStatus = yield payment_service_1.PaymentService.getAccountStatus(profile.stripeConnectId);
+                if (!stripeStatus.payouts_enabled || !stripeStatus.details_submitted) {
+                    return res.status(400).json({ message: 'Withdrawals are locked! Your Stripe account is missing critical verification steps. Click "Complete Setup" in your wallet first.' });
+                }
                 yield payment_service_1.PaymentService.processPayout(userId, amount);
                 status = 'completed';
                 description = 'Withdrawal to Stripe';
@@ -221,17 +225,15 @@ exports.PaymentController = {
             res.status(500).json({ message: error.message });
         }
     }),
-    // 6. Admin Release Payment
+    // 6. Admin Release Payment (or Automatic Cron Call)
     releasePayment: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         try {
-            const settings = yield PlatformSettings_1.default.findOne();
-            const holdingPeriod = (settings === null || settings === void 0 ? void 0 : settings.payoutHoldingPeriod) || 7;
-            const payoutThresholdDate = new Date();
-            payoutThresholdDate.setDate(payoutThresholdDate.getDate() - holdingPeriod);
+            const now = new Date();
+            // Only release payments where the 7-day post-approval timer (availableAt) has passed
             const result = yield Transaction_1.default.updateMany({
                 status: 'pending',
                 type: 'earning',
-                createdAt: { $lte: payoutThresholdDate }
+                availableAt: { $lte: now }
             }, { status: 'available' });
             res.json({ message: 'Payments released', count: result.modifiedCount });
         }

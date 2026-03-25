@@ -239,6 +239,12 @@ export const PaymentController = {
             let description = 'Withdrawal Request (Bank Transfer)';
 
             if (hasStripe) {
+                // Verify the dashboard capabilities are actually active
+                const stripeStatus = await PaymentService.getAccountStatus(profile.stripeConnectId as string);
+                if (!stripeStatus.payouts_enabled || !stripeStatus.details_submitted) {
+                    return res.status(400).json({ message: 'Withdrawals are locked! Your Stripe account is missing critical verification steps. Click "Complete Setup" in your wallet first.' });
+                }
+                
                 await PaymentService.processPayout(userId, amount);
                 status = 'completed';
                 description = 'Withdrawal to Stripe';
@@ -261,20 +267,17 @@ export const PaymentController = {
         }
     },
 
-    // 6. Admin Release Payment
+    // 6. Admin Release Payment (or Automatic Cron Call)
     releasePayment: async (req: AuthenticatedRequest, res: Response) => {
         try {
-            const settings = await PlatformSettings.findOne();
-            const holdingPeriod = settings?.payoutHoldingPeriod || 7;
+            const now = new Date();
 
-            const payoutThresholdDate = new Date();
-            payoutThresholdDate.setDate(payoutThresholdDate.getDate() - holdingPeriod);
-
+            // Only release payments where the 7-day post-approval timer (availableAt) has passed
             const result = await Transaction.updateMany(
                 {
                     status: 'pending',
                     type: 'earning',
-                    createdAt: { $lte: payoutThresholdDate }
+                    availableAt: { $lte: now }
                 },
                 { status: 'available' }
             );

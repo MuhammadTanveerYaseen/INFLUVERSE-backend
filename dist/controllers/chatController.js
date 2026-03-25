@@ -52,6 +52,7 @@ const Order_1 = __importDefault(require("../models/Order"));
 const PlatformSettings_1 = __importDefault(require("../models/PlatformSettings"));
 const User_1 = __importDefault(require("../models/User"));
 const socket_service_1 = require("../services/socket.service");
+const redis_1 = __importDefault(require("../config/redis"));
 // Helper to filter sensitive info
 const filterMessageContent = (content) => {
     const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi;
@@ -191,6 +192,11 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
                 console.error('[Chat] Failed to send new message email:', err);
             }
         }
+        if (redis_1.default.isReady) {
+            chat.participants.forEach((participantId) => {
+                redis_1.default.del(`chats_${participantId.toString()}`);
+            });
+        }
         res.status(201).json(populatedMessage);
     }
     catch (error) {
@@ -214,6 +220,11 @@ const clearChat = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         chat.participants.forEach((participantId) => {
             (0, socket_service_1.emitToUser)(participantId.toString(), 'chat_cleared', { chatId });
         });
+        if (redis_1.default.isReady) {
+            chat.participants.forEach((participantId) => {
+                redis_1.default.del(`chats_${participantId.toString()}`);
+            });
+        }
         res.json({ message: 'Chat cleared successfully' });
     }
     catch (error) {
@@ -238,6 +249,11 @@ const deleteChat = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
         chat.participants.forEach((participantId) => {
             (0, socket_service_1.emitToUser)(participantId.toString(), 'chat_deleted', { chatId });
         });
+        if (redis_1.default.isReady) {
+            chat.participants.forEach((participantId) => {
+                redis_1.default.del(`chats_${participantId.toString()}`);
+            });
+        }
         res.json({ message: 'Chat deleted successfully' });
     }
     catch (error) {
@@ -313,6 +329,9 @@ const getMessages = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             .map(msg => msg._id);
         if (unreadIds.length > 0) {
             yield Message_1.default.updateMany({ _id: { $in: unreadIds } }, { $addToSet: { readBy: userId } });
+            if (redis_1.default.isReady) {
+                yield redis_1.default.del(`chats_${userId}`);
+            }
         }
         res.json(messages);
     }
@@ -327,6 +346,13 @@ const getUserChats = (req, res) => __awaiter(void 0, void 0, void 0, function* (
     try {
         const { isUserOnline } = yield Promise.resolve().then(() => __importStar(require('../services/socket.service')));
         const userId = (req.user._id || req.user.id).toString();
+        const CACHE_KEY = `chats_${userId}`;
+        if (redis_1.default.isReady) {
+            const cachedData = yield redis_1.default.get(CACHE_KEY);
+            if (cachedData) {
+                return res.status(200).json(JSON.parse(cachedData));
+            }
+        }
         const chats = yield Chat_1.default.find({ participants: userId })
             .populate('participants', 'username')
             .populate('order', 'status')
@@ -345,6 +371,9 @@ const getUserChats = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             });
             return Object.assign(Object.assign({}, chat.toObject()), { unreadCount, lastMessage: lastMessageObj, participants: participantsData });
         })));
+        if (redis_1.default.isReady) {
+            yield redis_1.default.setEx(CACHE_KEY, 120, JSON.stringify(chatsWithDetails));
+        }
         res.json(chatsWithDetails);
     }
     catch (error) {

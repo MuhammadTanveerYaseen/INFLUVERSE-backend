@@ -19,13 +19,13 @@ const CACHE_KEY = 'crmItems';
 const CACHE_TTL = 300; // 5 minutes in seconds
 const getCRMItems = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        if (redis_1.default.isOpen) {
+        if (redis_1.default.isReady) {
             const cachedData = yield redis_1.default.get(CACHE_KEY);
             if (cachedData) {
                 return res.status(200).json(JSON.parse(cachedData));
             }
         }
-        const items = yield CRMItem_1.default.find().sort({ createdAt: -1 }).limit(500).lean();
+        const items = yield CRMItem_1.default.find().sort({ createdAt: -1 }).lean();
         const mappedItems = items.map(crmItem => ({
             _id: crmItem._id,
             type: crmItem.type,
@@ -42,7 +42,7 @@ const getCRMItems = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             followUpDate: crmItem.followUpDate ? new Date(crmItem.followUpDate).toISOString().split('T')[0] : '',
             comments: crmItem.comments
         }));
-        if (redis_1.default.isOpen) {
+        if (redis_1.default.isReady) {
             yield redis_1.default.setEx(CACHE_KEY, CACHE_TTL, JSON.stringify(mappedItems));
         }
         res.status(200).json(mappedItems);

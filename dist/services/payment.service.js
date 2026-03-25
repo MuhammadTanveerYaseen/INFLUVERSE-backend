@@ -94,11 +94,7 @@ class PaymentService {
                 metadata: { orderId },
                 automatic_payment_methods: {
                     enabled: true,
-                },
-                transfer_data: {
-                    destination: connectId,
-                },
-                application_fee_amount: applicationFeeInCents,
+                }
             });
             return paymentIntent;
         });

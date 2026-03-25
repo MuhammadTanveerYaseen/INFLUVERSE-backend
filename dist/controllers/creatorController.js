@@ -54,6 +54,7 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const emailService_1 = require("../utils/emailService");
 const mongoose_1 = __importDefault(require("mongoose"));
+const redis_1 = __importDefault(require("../config/redis"));
 const generateToken = (id, role, username, email, status, isVerified, name, rejectionReason) => {
     return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '30d',
@@ -181,6 +182,13 @@ exports.updateCreatorProfile = updateCreatorProfile;
 const getCreators = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { category, country, featured } = req.query;
+        const CACHE_KEY = `creators_${category || 'all'}_${country || 'all'}_${featured || 'false'}`;
+        if (redis_1.default.isReady) {
+            const cachedData = yield redis_1.default.get(CACHE_KEY);
+            if (cachedData) {
+                return res.status(200).json(JSON.parse(cachedData));
+            }
+        }
         let query = {};
         if (category && category !== 'all') {
             query.categories = { $in: [category] };
@@ -194,6 +202,9 @@ const getCreators = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         const creatorsList = yield CreatorProfile_1.default.find(query).populate('user', 'username email status isVerified');
         // Filter out orphans and unapproved creators
         const validCreators = creatorsList.filter(c => c.user && c.user.status === 'active');
+        if (redis_1.default.isReady) {
+            yield redis_1.default.setEx(CACHE_KEY, 300, JSON.stringify(validCreators));
+        }
         res.json(validCreators);
     }
     catch (error) {
