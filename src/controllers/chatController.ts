@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import Chat from '../models/Chat';
 import Message from '../models/Message';
 import Order from '../models/Order';
@@ -81,7 +82,13 @@ export const sendMessage = async (req: Request | any, res: Response) => {
             return res.status(400).json({ message: 'Chat is read-only because order is cancelled or completed.' });
         }
 
-        const settings = await PlatformSettings.findOne();
+        const otherParticipantId = chat.participants.find(p => p.toString() !== userId);
+        const [settings, otherUser, senderUser, lastMessageInChat] = await Promise.all([
+            PlatformSettings.findOne(),
+            otherParticipantId ? User.findById(otherParticipantId) : Promise.resolve(null),
+            User.findById(userId),
+            Message.findOne({ chat: chatId }).sort({ createdAt: -1 })
+        ]);
 
         let safeContent = filterMessageContent(content);
         if (settings && settings.bannedKeywords && Array.isArray(settings.bannedKeywords) && settings.bannedKeywords.length > 0) {
@@ -108,23 +115,16 @@ export const sendMessage = async (req: Request | any, res: Response) => {
             }
         }
 
-        // Check for block status before creating message
-        const otherParticipantId = chat.participants.find(p => p.toString() !== userId);
-        if (otherParticipantId) {
-            const recipient = await User.findById(otherParticipantId);
-            if (recipient && recipient.blockedUsers.some(id => id.toString() === userId)) {
-                console.log(`[Chat] Blocking message: recipient ${otherParticipantId} has blocked sender ${userId}`);
+        // Check for block status using pre-fetched data
+        if (otherParticipantId && otherUser) {
+            if (otherUser.blockedUsers.some(id => id.toString() === userId)) {
                 return res.status(403).json({ message: 'You have been blocked by this user.' });
             }
-            
-            const sender = await User.findById(userId);
-            if (sender && sender.blockedUsers.some(id => id.toString() === otherParticipantId.toString())) {
-                console.log(`[Chat] Blocking message: sender ${userId} has blocked recipient ${otherParticipantId}`);
+            if (senderUser && senderUser.blockedUsers.some(id => id.toString() === otherParticipantId.toString())) {
                 return res.status(403).json({ message: 'You have blocked this user. Unblock them to send messages.' });
             }
         }
 
-        const lastMessageInChat = await Message.findOne({ chat: chatId }).sort({ createdAt: -1 });
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const shouldSendEmail = !lastMessageInChat || lastMessageInChat.createdAt < twentyFourHoursAgo;
 
@@ -139,38 +139,44 @@ export const sendMessage = async (req: Request | any, res: Response) => {
 
         chat.updatedAt = new Date();
         await chat.save();
-        const populatedMessage = await Message.findById(message._id).populate('sender', 'username');
+        const populatedMessage = await message.populate('sender', 'username profilePhoto');
 
-        chat.participants.forEach((participantId: any) => {
-            emitToUser(participantId.toString(), 'chat_message', {
+        // Deduplicate participants to avoid sending multiple socket events to the same user
+        const uniqueParticipants = Array.from(new Set(chat.participants.map(p => p.toString())));
+
+        uniqueParticipants.forEach((participantId: string) => {
+            emitToUser(participantId, 'chat_message', {
                 chatId,
                 message: populatedMessage
             });
-            emitToUser(participantId.toString(), 'refresh_chats', {});
+            emitToUser(participantId, 'refresh_chats', {});
         });
 
         if (shouldSendEmail && otherParticipantId) {
-            try {
-                const recipientUser = await User.findById(otherParticipantId);
-                const senderUser = await User.findById(userId);
-                if (recipientUser && senderUser) {
-                    const { sendEmail, emailTemplates } = require('../utils/emailService');
-                    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                    const link = `${frontendUrl}/dashboard/${recipientUser.role}/messages/${chatId}`;
-                    await sendEmail(
-                        recipientUser.email,
-                        `New message from ${senderUser.username}`,
-                        emailTemplates.newMessage(senderUser.username, link, 'en') // Assume 'en' as default
-                    );
+            // FIRE AND FORGET: Do not await email sending to avoid blocking the chat UI
+            (async () => {
+                try {
+                    const recipientUser = await User.findById(otherParticipantId);
+                    const senderUser = await User.findById(userId);
+                    if (recipientUser && senderUser) {
+                        const { sendEmail, emailTemplates } = require('../utils/emailService');
+                        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                        const link = `${frontendUrl}/dashboard/${recipientUser.role}/messages/${chatId}`;
+                        await sendEmail(
+                            recipientUser.email,
+                            `New message from ${senderUser.username}`,
+                            emailTemplates.newMessage(senderUser.username, link, 'en')
+                        );
+                    }
+                } catch (err) {
+                    console.error('[Chat] Background email send failed:', err);
                 }
-            } catch (err) {
-                console.error('[Chat] Failed to send new message email:', err);
-            }
+            })();
         }
 
         if (redisClient.isReady) {
-            chat.participants.forEach((participantId: any) => {
-                redisClient.del(`chats_${participantId.toString()}`);
+            uniqueParticipants.forEach((participantId: string) => {
+                redisClient.del(`chats_${participantId}`);
             });
         }
 
@@ -295,7 +301,70 @@ export const checkBlockStatus = async (req: Request | any, res: Response) => {
 
 
 
-// @desc    Get Messages & Mark as Read
+// @desc    Get Single Chat Details
+export const getChatDetails = async (req: Request | any, res: Response) => {
+    try {
+        const { chatId } = req.params;
+        const { isUserOnline } = await import('../services/socket.service');
+        const userId = (req.user._id || req.user.id).toString();
+
+        const chat = await Chat.findById(chatId)
+            .populate('participants', 'username profilePhoto role')
+            .populate('order', 'status')
+            .populate('offer', 'status price deliverables brand creator sender paid order')
+            .lean();
+
+        if (!chat) return res.status(404).json({ message: 'Chat not found' });
+
+        const isParticipant = chat.participants.some(p => p._id.toString() === userId);
+        if (!isParticipant && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        const unreadCount = await Message.countDocuments({
+            chat: chat._id,
+            readBy: { $ne: userId },
+            sender: { $ne: userId }
+        });
+
+        const lastMessageObj = await Message.findOne({ chat: chat._id })
+            .sort({ createdAt: -1 })
+            .select('content createdAt attachments');
+
+        const participantsData = chat.participants.map((pid: any) => {
+            return {
+                ...pid,
+                isOnline: isUserOnline(pid._id.toString())
+            };
+        });
+
+        const messages = await Message.find({ chat: chat._id })
+            .populate('sender', 'username profilePhoto')
+            .populate('offer', 'status price deliverables brand creator sender paid order')
+            .sort({ createdAt: 1 })
+            .lean();
+
+        // Background: Mark as read
+        const unreadIds = messages
+            .filter(msg => !msg.readBy.some((r: any) => r.toString() === userId) && msg.sender?._id?.toString() !== userId && msg.sender !== userId)
+            .map(msg => msg._id);
+        if (unreadIds.length > 0) {
+            Message.updateMany({ _id: { $in: unreadIds } }, { $addToSet: { readBy: userId } }).catch(() => {});
+            if (redisClient.isReady) redisClient.del(`chats_${userId}`).catch(() => {});
+        }
+
+        res.json({
+            ...chat,
+            unreadCount,
+            lastMessage: lastMessageObj,
+            participants: participantsData,
+            messages // Include messages in the details response
+        });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 export const getMessages = async (req: Request | any, res: Response) => {
     try {
         const { chatId } = req.params;
@@ -313,21 +382,25 @@ export const getMessages = async (req: Request | any, res: Response) => {
         }
 
         const messages = await Message.find({ chat: chatId })
-            .populate('sender', 'username')
-            .populate('offer')
-            .sort({ createdAt: 1 });
+            .populate('sender', 'username profilePhoto')
+            .populate('offer', 'status price deliverables brand creator sender paid order')
+            .sort({ createdAt: 1 })
+            .lean();
 
+        // Calculate unread IDs to mark as read
         const unreadIds = messages
-            .filter(msg => !msg.readBy.some(r => r.toString() === userId) && msg.sender._id.toString() !== userId)
+            .filter(msg => !msg.readBy.some((r: any) => r.toString() === userId) && msg.sender?._id?.toString() !== userId && msg.sender !== userId)
             .map(msg => msg._id);
 
         if (unreadIds.length > 0) {
-            await Message.updateMany(
+            // FIRE AND FORGET: Mark messages as read in the background
+            Message.updateMany(
                 { _id: { $in: unreadIds } },
                 { $addToSet: { readBy: userId } }
-            );
+            ).catch(err => console.error('[Chat] Background mark as read failed:', err));
+
             if (redisClient.isReady) {
-                await redisClient.del(`chats_${userId}`);
+                redisClient.del(`chats_${userId}`).catch(() => {});
             }
         }
 
@@ -353,35 +426,49 @@ export const getUserChats = async (req: Request | any, res: Response) => {
         }
 
         const chats = await Chat.find({ participants: userId })
-            .populate('participants', 'username')
+            .populate('participants', 'username profilePhoto')
             .populate('order', 'status')
-            .sort({ updatedAt: -1 });
+            .sort({ updatedAt: -1 })
+            .lean();
 
-        const chatsWithDetails = await Promise.all(chats.map(async (chat) => {
-            const unreadCount = await Message.countDocuments({
-                chat: chat._id,
-                readBy: { $ne: userId },
-                sender: { $ne: userId }
-            });
+        const chatIds = chats.map(c => c._id);
 
-            const lastMessageObj = await Message.findOne({ chat: chat._id })
-                .sort({ createdAt: -1 })
-                .select('content createdAt attachments');
+        // Fetch unread counts in one query
+        const unreadCounts = await Message.aggregate([
+            { $match: { chat: { $in: chatIds }, readBy: { $ne: new mongoose.Types.ObjectId(userId) }, sender: { $ne: new mongoose.Types.ObjectId(userId) } } },
+            { $group: { _id: '$chat', count: { $sum: 1 } } }
+        ]);
+        const unreadMap = Object.fromEntries(unreadCounts.map(u => [u._id.toString(), u.count]));
 
-            const participantsData = chat.participants.map((pid: any) => {
+        // Fetch last messages in one query
+        const lastMessages = await Message.aggregate([
+            { $match: { chat: { $in: chatIds } } },
+            { $sort: { createdAt: -1 } },
+            { $group: { 
+                _id: '$chat', 
+                content: { $first: '$content' },
+                createdAt: { $first: '$createdAt' },
+                attachments: { $first: '$attachments' }
+            } }
+        ]);
+        const lastMsgMap = Object.fromEntries(lastMessages.map(m => [m._id.toString(), m]));
+
+        const chatsWithDetails = chats.map((chat) => {
+            const chatIdStr = (chat as any)._id.toString();
+            const participantsData = (chat as any).participants.map((pid: any) => {
                 return {
-                    ...pid.toObject(),
+                    ...pid,
                     isOnline: isUserOnline(pid._id.toString())
                 };
             });
 
             return {
-                ...chat.toObject(),
-                unreadCount,
-                lastMessage: lastMessageObj,
+                ...chat,
+                unreadCount: unreadMap[chatIdStr] || 0,
+                lastMessage: lastMsgMap[chatIdStr] || null,
                 participants: participantsData,
             };
-        }));
+        });
 
         if (redisClient.isReady) {
             await redisClient.setEx(CACHE_KEY, 120, JSON.stringify(chatsWithDetails));

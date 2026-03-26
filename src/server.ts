@@ -79,6 +79,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 
 const PORT = process.env.PORT || 5000;
 
+
 httpServer.listen(PORT, () => {
     console.log(`API Service with Socket.io running on port ${PORT}`);
 });
