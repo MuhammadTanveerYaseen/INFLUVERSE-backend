@@ -11,6 +11,7 @@ router.post('/start', authMiddleware_1.protect, chatController_1.startChat);
 router.get('/', authMiddleware_1.protect, chatController_1.getUserChats);
 router.post('/block', authMiddleware_1.protect, chatController_1.toggleBlockUser);
 router.get('/block/:targetUserId', authMiddleware_1.protect, chatController_1.checkBlockStatus);
+router.get('/:chatId', authMiddleware_1.protect, chatController_1.getChatDetails);
 router.delete('/:chatId', authMiddleware_1.protect, chatController_1.deleteChat);
 router.delete('/:chatId/messages', authMiddleware_1.protect, chatController_1.clearChat);
 router.post('/:chatId/messages', authMiddleware_1.protect, chatController_1.sendMessage);

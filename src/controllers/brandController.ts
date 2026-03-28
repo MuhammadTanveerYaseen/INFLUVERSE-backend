@@ -10,11 +10,7 @@ import bcrypt from 'bcryptjs';
 import { sendEmail, emailTemplates } from '../utils/emailService';
 import mongoose from 'mongoose';
 
-const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, name?: string, rejectionReason?: string) => {
-    return jwt.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
-        expiresIn: '30d',
-    });
-};
+import { generateToken } from './authController';
 
 // @desc    Register a new Brand
 // @route   POST /api/brands/register
@@ -91,6 +87,7 @@ export const getBrandProfile = async (req: Request | any, res: Response) => {
             username: user.username,
             email: user.email,
             role: user.role,
+            profileImage: profile?.logo || '',
             profileData: profile
         });
     } else {
@@ -142,7 +139,8 @@ export const updateBrandProfile = async (req: Request | any, res: Response) => {
             username: updatedUser.username,
             email: updatedUser.email,
             role: updatedUser.role,
-            token: generateToken(updatedUser._id.toString(), updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason),
+            profileImage: updatedProfile?.logo || '',
+            token: generateToken(updatedUser._id.toString(), updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason, updatedProfile?.logo),
             profileData: updatedProfile
         });
     } else {

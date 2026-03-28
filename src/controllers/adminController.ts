@@ -8,6 +8,7 @@ import PlatformSettings from '../models/PlatformSettings';
 import Transaction from '../models/Transaction';
 import Chat from '../models/Chat';
 import Message from '../models/Message';
+import BrandProfile from '../models/BrandProfile';
 
 // @desc    Get All Users (Admin)
 // @route   GET /api/admin/users
@@ -16,15 +17,23 @@ export const getUsers = async (req: Request, res: Response) => {
     try {
         const users = await User.find().select('-password').lean(); // Use lean for faster processing
 
-        const usersWithFeatured = await Promise.all(users.map(async (u: any) => {
+        const usersWithProfile = await Promise.all(users.map(async (u: any) => {
+            let profileImage = '';
+            let isFeatured = false;
+
             if (u.role === 'creator') {
-                const profile = await CreatorProfile.findOne({ user: u._id }).select('isFeatured');
-                return { ...u, isFeatured: profile?.isFeatured || false };
+                const profile = await CreatorProfile.findOne({ user: u._id }).select('profileImage isFeatured');
+                profileImage = profile?.profileImage || '';
+                isFeatured = profile?.isFeatured || false;
+            } else if (u.role === 'brand') {
+                const profile = await BrandProfile.findOne({ user: u._id }).select('logo');
+                profileImage = profile?.logo || '';
             }
-            return u;
+
+            return { ...u, profileImage, isFeatured };
         }));
 
-        res.json(usersWithFeatured);
+        res.json(usersWithProfile);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
@@ -284,10 +293,22 @@ export const getDashboardOverview = async (req: Request, res: Response) => {
         const totalRevenue = approvedOrdersList.reduce((sum, o) => sum + (o.platformFee || 0), 0);
         const totalEarnings = approvedOrdersList.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
-        const recentSignups = await User.find()
+        const signups = await User.find()
             .select('username email role createdAt')
             .sort({ createdAt: -1 })
             .limit(5);
+
+        const recentSignups = await Promise.all(signups.map(async (u: any) => {
+            let profileImage = '';
+            if (u.role === 'creator') {
+                const profile = await CreatorProfile.findOne({ user: u._id }).select('profileImage');
+                profileImage = profile?.profileImage || '';
+            } else if (u.role === 'brand') {
+                const profile = await BrandProfile.findOne({ user: u._id }).select('logo');
+                profileImage = profile?.logo || '';
+            }
+            return { ...u.toObject(), profileImage };
+        }));
 
         const recentOrders = await Order.find()
             .populate('brand', 'username')
@@ -334,11 +355,28 @@ export const getDashboardOverview = async (req: Request, res: Response) => {
 export const getReports = async (req: Request, res: Response) => {
     try {
         const reports = await Report.find()
-            .populate('reporter', 'username email')
-            .populate('reportedUser', 'username email')
+            .populate('reporter', 'username email role')
+            .populate('reportedUser', 'username email role')
             .sort({ createdAt: -1 });
 
-        res.json(reports);
+        // Add profile photo from CreatorProfile/BrandProfile for reportedUser
+        const enhancedReports = await Promise.all(reports.map(async (report: any) => {
+            const rObj = report.toObject();
+            if (rObj.reportedUser) {
+                let profileImage = '';
+                if (rObj.reportedUser.role === 'creator') {
+                    const profile = await CreatorProfile.findOne({ user: rObj.reportedUser._id }).select('profileImage');
+                    profileImage = profile?.profileImage || '';
+                } else if (rObj.reportedUser.role === 'brand') {
+                    const profile = await BrandProfile.findOne({ user: rObj.reportedUser._id }).select('logo');
+                    profileImage = profile?.logo || '';
+                }
+                rObj.reportedUser.profileImage = profileImage;
+            }
+            return rObj;
+        }));
+
+        res.json(enhancedReports);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }

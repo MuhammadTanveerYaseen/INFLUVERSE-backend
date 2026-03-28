@@ -45,7 +45,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUserChats = exports.getMessages = exports.checkBlockStatus = exports.toggleBlockUser = exports.deleteChat = exports.clearChat = exports.sendMessage = exports.startChat = void 0;
+exports.getUserChats = exports.getMessages = exports.getChatDetails = exports.checkBlockStatus = exports.toggleBlockUser = exports.deleteChat = exports.clearChat = exports.sendMessage = exports.startChat = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const Chat_1 = __importDefault(require("../models/Chat"));
 const Message_1 = __importDefault(require("../models/Message"));
 const Order_1 = __importDefault(require("../models/Order"));
@@ -118,7 +119,13 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         if (chat.isReadOnly) {
             return res.status(400).json({ message: 'Chat is read-only because order is cancelled or completed.' });
         }
-        const settings = yield PlatformSettings_1.default.findOne();
+        const otherParticipantId = chat.participants.find(p => p.toString() !== userId);
+        const [settings, otherUser, senderUser, lastMessageInChat] = yield Promise.all([
+            PlatformSettings_1.default.findOne(),
+            otherParticipantId ? User_1.default.findById(otherParticipantId) : Promise.resolve(null),
+            User_1.default.findById(userId),
+            Message_1.default.findOne({ chat: chatId }).sort({ createdAt: -1 })
+        ]);
         let safeContent = filterMessageContent(content);
         if (settings && settings.bannedKeywords && Array.isArray(settings.bannedKeywords) && settings.bannedKeywords.length > 0) {
             settings.bannedKeywords.forEach((keyword) => {
@@ -141,21 +148,15 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
                 return res.status(403).json({ message: 'Account suspended due to spamming.' });
             }
         }
-        // Check for block status before creating message
-        const otherParticipantId = chat.participants.find(p => p.toString() !== userId);
-        if (otherParticipantId) {
-            const recipient = yield User_1.default.findById(otherParticipantId);
-            if (recipient && recipient.blockedUsers.some(id => id.toString() === userId)) {
-                console.log(`[Chat] Blocking message: recipient ${otherParticipantId} has blocked sender ${userId}`);
+        // Check for block status using pre-fetched data
+        if (otherParticipantId && otherUser) {
+            if (otherUser.blockedUsers.some(id => id.toString() === userId)) {
                 return res.status(403).json({ message: 'You have been blocked by this user.' });
             }
-            const sender = yield User_1.default.findById(userId);
-            if (sender && sender.blockedUsers.some(id => id.toString() === otherParticipantId.toString())) {
-                console.log(`[Chat] Blocking message: sender ${userId} has blocked recipient ${otherParticipantId}`);
+            if (senderUser && senderUser.blockedUsers.some(id => id.toString() === otherParticipantId.toString())) {
                 return res.status(403).json({ message: 'You have blocked this user. Unblock them to send messages.' });
             }
         }
-        const lastMessageInChat = yield Message_1.default.findOne({ chat: chatId }).sort({ createdAt: -1 });
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const shouldSendEmail = !lastMessageInChat || lastMessageInChat.createdAt < twentyFourHoursAgo;
         const message = yield Message_1.default.create({
@@ -168,33 +169,37 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         });
         chat.updatedAt = new Date();
         yield chat.save();
-        const populatedMessage = yield Message_1.default.findById(message._id).populate('sender', 'username');
-        chat.participants.forEach((participantId) => {
-            (0, socket_service_1.emitToUser)(participantId.toString(), 'chat_message', {
+        const populatedMessage = yield message.populate('sender', 'username profilePhoto');
+        // Deduplicate participants to avoid sending multiple socket events to the same user
+        const uniqueParticipants = Array.from(new Set(chat.participants.map(p => p.toString())));
+        uniqueParticipants.forEach((participantId) => {
+            (0, socket_service_1.emitToUser)(participantId, 'chat_message', {
                 chatId,
                 message: populatedMessage
             });
-            (0, socket_service_1.emitToUser)(participantId.toString(), 'refresh_chats', {});
+            (0, socket_service_1.emitToUser)(participantId, 'refresh_chats', {});
         });
         if (shouldSendEmail && otherParticipantId) {
-            try {
-                const recipientUser = yield User_1.default.findById(otherParticipantId);
-                const senderUser = yield User_1.default.findById(userId);
-                if (recipientUser && senderUser) {
-                    const { sendEmail, emailTemplates } = require('../utils/emailService');
-                    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                    const link = `${frontendUrl}/dashboard/${recipientUser.role}/messages/${chatId}`;
-                    yield sendEmail(recipientUser.email, `New message from ${senderUser.username}`, emailTemplates.newMessage(senderUser.username, link, 'en') // Assume 'en' as default
-                    );
+            // FIRE AND FORGET: Do not await email sending to avoid blocking the chat UI
+            (() => __awaiter(void 0, void 0, void 0, function* () {
+                try {
+                    const recipientUser = yield User_1.default.findById(otherParticipantId);
+                    const senderUser = yield User_1.default.findById(userId);
+                    if (recipientUser && senderUser) {
+                        const { sendEmail, emailTemplates } = require('../utils/emailService');
+                        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+                        const link = `${frontendUrl}/dashboard/${recipientUser.role}/messages/${chatId}`;
+                        yield sendEmail(recipientUser.email, `New message from ${senderUser.username}`, emailTemplates.newMessage(senderUser.username, link, 'en'));
+                    }
                 }
-            }
-            catch (err) {
-                console.error('[Chat] Failed to send new message email:', err);
-            }
+                catch (err) {
+                    console.error('[Chat] Background email send failed:', err);
+                }
+            }))();
         }
         if (redis_1.default.isReady) {
-            chat.participants.forEach((participantId) => {
-                redis_1.default.del(`chats_${participantId.toString()}`);
+            uniqueParticipants.forEach((participantId) => {
+                redis_1.default.del(`chats_${participantId}`);
             });
         }
         res.status(201).json(populatedMessage);
@@ -307,7 +312,56 @@ const checkBlockStatus = (req, res) => __awaiter(void 0, void 0, void 0, functio
     }
 });
 exports.checkBlockStatus = checkBlockStatus;
-// @desc    Get Messages & Mark as Read
+// @desc    Get Single Chat Details
+const getChatDetails = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { chatId } = req.params;
+        const { isUserOnline } = yield Promise.resolve().then(() => __importStar(require('../services/socket.service')));
+        const userId = (req.user._id || req.user.id).toString();
+        const chat = yield Chat_1.default.findById(chatId)
+            .populate('participants', 'username profilePhoto role')
+            .populate('order', 'status')
+            .populate('offer', 'status price deliverables brand creator sender paid order')
+            .lean();
+        if (!chat)
+            return res.status(404).json({ message: 'Chat not found' });
+        const isParticipant = chat.participants.some(p => p._id.toString() === userId);
+        if (!isParticipant && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+        const unreadCount = yield Message_1.default.countDocuments({
+            chat: chat._id,
+            readBy: { $ne: userId },
+            sender: { $ne: userId }
+        });
+        const lastMessageObj = yield Message_1.default.findOne({ chat: chat._id })
+            .sort({ createdAt: -1 })
+            .select('content createdAt attachments');
+        const participantsData = chat.participants.map((pid) => {
+            return Object.assign(Object.assign({}, pid), { isOnline: isUserOnline(pid._id.toString()) });
+        });
+        const messages = yield Message_1.default.find({ chat: chat._id })
+            .populate('sender', 'username profilePhoto')
+            .populate('offer', 'status price deliverables brand creator sender paid order')
+            .sort({ createdAt: 1 })
+            .lean();
+        // Background: Mark as read
+        const unreadIds = messages
+            .filter(msg => { var _a, _b; return !msg.readBy.some((r) => r.toString() === userId) && ((_b = (_a = msg.sender) === null || _a === void 0 ? void 0 : _a._id) === null || _b === void 0 ? void 0 : _b.toString()) !== userId && msg.sender !== userId; })
+            .map(msg => msg._id);
+        if (unreadIds.length > 0) {
+            Message_1.default.updateMany({ _id: { $in: unreadIds } }, { $addToSet: { readBy: userId } }).catch(() => { });
+            if (redis_1.default.isReady)
+                redis_1.default.del(`chats_${userId}`).catch(() => { });
+        }
+        res.json(Object.assign(Object.assign({}, chat), { unreadCount, lastMessage: lastMessageObj, participants: participantsData, messages // Include messages in the details response
+         }));
+    }
+    catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+exports.getChatDetails = getChatDetails;
 const getMessages = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { chatId } = req.params;
@@ -321,16 +375,19 @@ const getMessages = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             return res.status(403).json({ message: 'Not authorized' });
         }
         const messages = yield Message_1.default.find({ chat: chatId })
-            .populate('sender', 'username')
-            .populate('offer')
-            .sort({ createdAt: 1 });
+            .populate('sender', 'username profilePhoto')
+            .populate('offer', 'status price deliverables brand creator sender paid order')
+            .sort({ createdAt: 1 })
+            .lean();
+        // Calculate unread IDs to mark as read
         const unreadIds = messages
-            .filter(msg => !msg.readBy.some(r => r.toString() === userId) && msg.sender._id.toString() !== userId)
+            .filter(msg => { var _a, _b; return !msg.readBy.some((r) => r.toString() === userId) && ((_b = (_a = msg.sender) === null || _a === void 0 ? void 0 : _a._id) === null || _b === void 0 ? void 0 : _b.toString()) !== userId && msg.sender !== userId; })
             .map(msg => msg._id);
         if (unreadIds.length > 0) {
-            yield Message_1.default.updateMany({ _id: { $in: unreadIds } }, { $addToSet: { readBy: userId } });
+            // FIRE AND FORGET: Mark messages as read in the background
+            Message_1.default.updateMany({ _id: { $in: unreadIds } }, { $addToSet: { readBy: userId } }).catch(err => console.error('[Chat] Background mark as read failed:', err));
             if (redis_1.default.isReady) {
-                yield redis_1.default.del(`chats_${userId}`);
+                redis_1.default.del(`chats_${userId}`).catch(() => { });
             }
         }
         res.json(messages);
@@ -354,23 +411,36 @@ const getUserChats = (req, res) => __awaiter(void 0, void 0, void 0, function* (
             }
         }
         const chats = yield Chat_1.default.find({ participants: userId })
-            .populate('participants', 'username')
+            .populate('participants', 'username profilePhoto')
             .populate('order', 'status')
-            .sort({ updatedAt: -1 });
-        const chatsWithDetails = yield Promise.all(chats.map((chat) => __awaiter(void 0, void 0, void 0, function* () {
-            const unreadCount = yield Message_1.default.countDocuments({
-                chat: chat._id,
-                readBy: { $ne: userId },
-                sender: { $ne: userId }
-            });
-            const lastMessageObj = yield Message_1.default.findOne({ chat: chat._id })
-                .sort({ createdAt: -1 })
-                .select('content createdAt attachments');
+            .sort({ updatedAt: -1 })
+            .lean();
+        const chatIds = chats.map(c => c._id);
+        // Fetch unread counts in one query
+        const unreadCounts = yield Message_1.default.aggregate([
+            { $match: { chat: { $in: chatIds }, readBy: { $ne: new mongoose_1.default.Types.ObjectId(userId) }, sender: { $ne: new mongoose_1.default.Types.ObjectId(userId) } } },
+            { $group: { _id: '$chat', count: { $sum: 1 } } }
+        ]);
+        const unreadMap = Object.fromEntries(unreadCounts.map(u => [u._id.toString(), u.count]));
+        // Fetch last messages in one query
+        const lastMessages = yield Message_1.default.aggregate([
+            { $match: { chat: { $in: chatIds } } },
+            { $sort: { createdAt: -1 } },
+            { $group: {
+                    _id: '$chat',
+                    content: { $first: '$content' },
+                    createdAt: { $first: '$createdAt' },
+                    attachments: { $first: '$attachments' }
+                } }
+        ]);
+        const lastMsgMap = Object.fromEntries(lastMessages.map(m => [m._id.toString(), m]));
+        const chatsWithDetails = chats.map((chat) => {
+            const chatIdStr = chat._id.toString();
             const participantsData = chat.participants.map((pid) => {
-                return Object.assign(Object.assign({}, pid.toObject()), { isOnline: isUserOnline(pid._id.toString()) });
+                return Object.assign(Object.assign({}, pid), { isOnline: isUserOnline(pid._id.toString()) });
             });
-            return Object.assign(Object.assign({}, chat.toObject()), { unreadCount, lastMessage: lastMessageObj, participants: participantsData });
-        })));
+            return Object.assign(Object.assign({}, chat), { unreadCount: unreadMap[chatIdStr] || 0, lastMessage: lastMsgMap[chatIdStr] || null, participants: participantsData });
+        });
         if (redis_1.default.isReady) {
             yield redis_1.default.setEx(CACHE_KEY, 120, JSON.stringify(chatsWithDetails));
         }

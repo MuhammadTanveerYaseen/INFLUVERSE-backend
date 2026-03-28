@@ -19,14 +19,24 @@ dotenv_1.default.config();
 const redisClient = (0, redis_1.createClient)({
     url: process.env.REDIS_URL || 'redis://localhost:6379'
 });
-redisClient.on('error', (err) => console.log('Redis Client Error', err));
-redisClient.on('connect', () => console.log('Redis connected'));
+redisClient.on('error', (err) => {
+    // Only log essential errors once or if not a connection refused
+    if (err.code !== 'ECONNREFUSED') {
+        console.warn('Redis Client Error:', err.message);
+    }
+});
+redisClient.on('connect', () => console.log('Redis connected successfully'));
 const connectRedis = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         yield redisClient.connect();
     }
     catch (error) {
-        console.error('Failed to connect to Redis', error);
+        if (error.code === 'ECONNREFUSED') {
+            console.log('Redis is not running locally. Caching will be disabled.');
+        }
+        else {
+            console.error('Failed to connect to Redis', error);
+        }
     }
 });
 exports.connectRedis = connectRedis;

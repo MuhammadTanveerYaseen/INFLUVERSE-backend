@@ -19,6 +19,10 @@ router.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'API Service is running' });
 });
 
+import { getActionsCount } from '../controllers/dashboardController';
+import { protect } from '../middleware/authMiddleware';
+router.get('/dashboard/actions/count', protect, getActionsCount);
+
 router.use('/auth', authRoutes);
 router.use('/brands', brandRoutes);
 router.use('/creators', creatorRoutes);

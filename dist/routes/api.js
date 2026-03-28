@@ -20,6 +20,9 @@ router.get('/settings/public', adminController_1.getPublicPlatformSettings);
 router.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'API Service is running' });
 });
+const dashboardController_1 = require("../controllers/dashboardController");
+const authMiddleware_1 = require("../middleware/authMiddleware");
+router.get('/dashboard/actions/count', authMiddleware_1.protect, dashboardController_1.getActionsCount);
 router.use('/auth', authRoutes_1.default);
 router.use('/brands', brandRoutes_1.default);
 router.use('/creators', creatorRoutes_1.default);

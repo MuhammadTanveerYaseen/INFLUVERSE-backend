@@ -10,11 +10,7 @@ import { sendEmail, emailTemplates } from '../utils/emailService';
 import mongoose from 'mongoose';
 import redisClient from '../config/redis';
 
-const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, name?: string, rejectionReason?: string) => {
-    return jwt.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
-        expiresIn: '30d',
-    });
-};
+import { generateToken } from './authController';
 
 // @desc    Register a new Creator
 // @route   POST /api/creators/register
@@ -91,6 +87,7 @@ export const getCreatorProfile = async (req: Request | any, res: Response) => {
             role: user.role,
             status: user.status,
             isVerified: user.isVerified,
+            profileImage: profile?.profileImage || '',
             profileData: profile
         });
     } else {
@@ -140,7 +137,8 @@ export const updateCreatorProfile = async (req: Request | any, res: Response) =>
             email: updatedUser.email,
             role: updatedUser.role,
             status: updatedUser.status, // Return current status
-            token: generateToken(updatedUser.id, updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason),
+            profileImage: updatedProfile?.profileImage || '',
+            token: generateToken(updatedUser.id, updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason, updatedProfile?.profileImage),
             profileData: updatedProfile
         });
     } else {

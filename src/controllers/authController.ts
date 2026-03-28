@@ -13,14 +13,14 @@ import CreatorProfile from '../models/CreatorProfile';
 // @access  Public
 export const forgotPassword = async (req: Request, res: Response) => {
     const { email } = req.body;
-    console.log(`[ForgotPassword] Request for: ${email}`);
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log(`[ForgotPassword] Request for: ${normalizedEmail}`);
 
     try {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: normalizedEmail });
 
         if (!user) {
-            // Security: Don't reveal if user exists
-            return res.status(200).json({ message: 'Email sent' });
+            return res.status(404).json({ message: 'No account found with this email address' });
         }
 
         // Generate Token
@@ -40,6 +40,7 @@ export const forgotPassword = async (req: Request, res: Response) => {
         const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
 
         try {
+            console.log(`[ForgotPassword] Attempting to send email to: ${user.email}`);
             await sendEmail(
                 user.email,
                 'Password Reset Request',
@@ -47,10 +48,13 @@ export const forgotPassword = async (req: Request, res: Response) => {
             );
 
             res.status(200).json({ message: 'Email sent' });
-        } catch (error) {
-            console.error(error);
+        } catch (error: any) {
+            console.error(`[ForgotPassword] Failed to send email: ${error.message}`);
             await User.findByIdAndUpdate(user._id || user.id, { resetPasswordToken: null, resetPasswordExpire: null });
-            return res.status(500).json({ message: 'Email could not be sent' });
+            return res.status(500).json({ 
+                message: 'Email could not be sent',
+                error: error.message 
+            });
         }
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -123,8 +127,8 @@ export const changePassword = async (req: Request, res: Response) => {
     }
 };
 
-const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, name?: string, rejectionReason?: string) => {
-    return jwt.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
+export const generateToken = (id: string, role: string, username: string, email: string, status: string, isVerified: boolean, name?: string, rejectionReason?: string, profileImage?: string) => {
+    return jwt.sign({ id, role, username, email, status, isVerified, name, rejectionReason, profileImage }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '30d',
     });
 };
@@ -154,10 +158,19 @@ export const deleteAccount = async (req: Request, res: Response) => {
 // @access  Public
 export const authUser = async (req: Request, res: Response) => {
     const { email, password } = req.body;
-
-    const user = await User.findOne({ email });
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
 
     if (user && user.password && (await bcrypt.compare(password, user.password))) {
+        let profileImage = '';
+        if (user.role === 'creator') {
+            const profile = await CreatorProfile.findOne({ user: user._id });
+            profileImage = profile?.profileImage || '';
+        } else if (user.role === 'brand') {
+            const profile = await BrandProfile.findOne({ user: user._id });
+            profileImage = profile?.logo || '';
+        }
+
         res.json({
             _id: user._id || user.id,
             name: user.name,
@@ -167,7 +180,8 @@ export const authUser = async (req: Request, res: Response) => {
             status: user.status,
             isVerified: user.isVerified,
             rejectionReason: user.rejectionReason,
-            token: generateToken((user.id || user._id).toString(), user.role, user.username, user.email, user.status, user.isVerified, user.name, user.rejectionReason || undefined),
+            profileImage,
+            token: generateToken((user.id || user._id).toString(), user.role, user.username, user.email, user.status, user.isVerified, user.name, user.rejectionReason || undefined, profileImage),
         });
     } else {
         res.status(401).json({ message: 'Invalid email or password' });
