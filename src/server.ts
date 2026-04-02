@@ -9,6 +9,7 @@ import { connectRedis } from './config/redis';
 import apiRoutes from './routes/api';
 import { initSocket } from './services/socket.service';
 import Transaction from './models/Transaction';
+import { allowedOrigins } from './config/cors';
 
 const app: Express = express();
 const httpServer = createServer(app);
@@ -18,18 +19,7 @@ initSocket(httpServer);
 
 // Middleware
 app.use(cors({
-    origin: [
-        process.env.FRONTEND_URL || "http://localhost:3000",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://influverse-frontend.vercel.app",
-        "https://influverse.ch",
-        "https://www.influverse.ch",
-        "https://influverse.de",
-        "https://www.influverse.de",
-        "https://influverse.at",
-        "https://www.influverse.at"
-    ],
+    origin: true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]

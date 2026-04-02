@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { Server as HttpServer } from 'http';
+import { allowedOrigins } from '../config/cors';
 
 let io: Server;
 const onlineUsers = new Map<string, string>(); // userId -> socketId (simplified, assumes one session per user for status)
@@ -8,8 +9,8 @@ const onlineUsers = new Map<string, string>(); // userId -> socketId (simplified
 export const initSocket = (server: HttpServer) => {
     io = new Server(server, {
         cors: {
-            origin: [process.env.FRONTEND_URL || "http://localhost:3000", "http://127.0.0.1:3000"],
-            methods: ["GET", "POST"],
+            origin: true,
+            methods: ["GET", "POST", "OPTIONS"],
             credentials: true
         }
     });
