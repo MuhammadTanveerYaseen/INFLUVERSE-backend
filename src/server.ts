@@ -22,7 +22,13 @@ app.use(cors({
         process.env.FRONTEND_URL || "http://localhost:3000",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "https://influverse-frontend.vercel.app"
+        "https://influverse-frontend.vercel.app",
+        "https://influverse.ch",
+        "https://www.influverse.ch",
+        "https://influverse.de",
+        "https://www.influverse.de",
+        "https://influverse.at",
+        "https://www.influverse.at"
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
