@@ -85,14 +85,14 @@ export const createOffer = async (req: Request | any, res: Response) => {
             ? `${frontendUrl}/dashboard/brand/offers` 
             : `${frontendUrl}/dashboard/creator/offers`;
 
-        await NotificationService.sendOfferReceived(
+        NotificationService.sendOfferReceived(
             targetUser.id,
             targetUser.email,
             senderId,
             senderUser.username,
             Number(price),
             targetDashboardUrl
-        );
+        ).catch(err => console.error(err));
 
         res.status(201).json(offer);
     } catch (error: any) {
@@ -166,23 +166,23 @@ export const respondToOffer = async (req: Request | any, res: Response) => {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
                 const dashboardRole = originalSenderUser.role === 'brand' ? 'brand' : 'creator';
                 
-                await NotificationService.sendOfferStatusUpdate(
+                NotificationService.sendOfferStatusUpdate(
                     originalSenderUser.id,
                     originalSenderUser.email,
                     userId,
                     responderUser.username,
                     'accepted',
                     `${frontendUrl}/dashboard/brand/orders`
-                );
+                ).catch(err => console.error(err));
 
                 // Add a specific payment notification for brands
                 if (originalSenderUser.role === 'brand') {
-                    await NotificationService.sendPaymentRequired(
+                    NotificationService.sendPaymentRequired(
                         originalSenderUser.id,
                         originalSenderUser.email,
                         order._id.toString(),
                         `${frontendUrl}/dashboard/brand/checkout/${order._id}`
-                    );
+                    ).catch(err => console.error(err));
                 }
             }
 
@@ -193,14 +193,14 @@ export const respondToOffer = async (req: Request | any, res: Response) => {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
                 const dashboardRole = originalSenderUser.role === 'brand' ? 'brand' : 'creator';
                 
-                await NotificationService.sendOfferStatusUpdate(
+                NotificationService.sendOfferStatusUpdate(
                     originalSenderUser.id,
                     originalSenderUser.email,
                     userId,
                     responderUser.username,
                     status,
                     `${frontendUrl}/dashboard/${dashboardRole}/offers`
-                );
+                ).catch(err => console.error(err));
             }
         }
 

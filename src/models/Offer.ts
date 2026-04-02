@@ -24,12 +24,14 @@ const offerSchema: Schema = new Schema({
     brand: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+        index: true
     },
     creator: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+        index: true
     },
     sender: {
         type: mongoose.Schema.Types.ObjectId,

@@ -65,11 +65,16 @@ const wrapEmail = (title: string, content: string, ctaLabel?: string, ctaHref?: 
 `;
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT || '587'),
+    secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
+    tls: {
+        rejectUnauthorized: false // Helps with some shared hosting providers
+    }
 });
 
 export const sendEmail = async (
@@ -88,7 +93,7 @@ export const sendEmail = async (
 
         console.log(`[EmailService] Sending email to: ${to} | Subject: ${subject}`);
         const mailOptions = {
-            from: `"Influverse Team" <${process.env.EMAIL_USER}>`,
+            from: `"Influverse Team" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
             to,
             subject,
             html,

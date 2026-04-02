@@ -44,11 +44,11 @@ export class NotificationService {
         );
 
         // Email
-        await sendEmail(
+        sendEmail(
             email,
             'New Offer Received on Influverse',
             emailTemplates.offerReceived(brandName, price, link)
-        );
+        ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendOfferStatusUpdate(recipientId: string, email: string, senderId: string, creatorName: string, status: string, link: string) {
@@ -64,11 +64,11 @@ export class NotificationService {
         );
 
         // Email
-        await sendEmail(
+        sendEmail(
             email,
             title,
             emailTemplates.offerStatusUpdate(creatorName, status, link)
-        );
+        ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendOrderCreated(recipientId: string, email: string, orderId: string, role: string, link: string) {
@@ -82,11 +82,11 @@ export class NotificationService {
         );
 
         // Email
-        await sendEmail(
+        sendEmail(
             email,
             `Order #${orderId} Started`,
             emailTemplates.orderCreated(orderId, role, link)
-        );
+        ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendContentDelivered(recipientId: string, email: string, senderId: string, orderId: string, link: string) {
@@ -101,11 +101,11 @@ export class NotificationService {
         );
 
         // Email
-        await sendEmail(
+        sendEmail(
             email,
             'Order Delivered - Review Needed',
             emailTemplates.contentDelivered(orderId, link)
-        );
+        ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendOrderApproved(recipientId: string, email: string, senderId: string, orderId: string, link: string) {
@@ -120,11 +120,11 @@ export class NotificationService {
         );
 
         // Email
-        await sendEmail(
+        sendEmail(
             email,
             'Order Approved!',
             emailTemplates.orderApproved(orderId, link)
-        );
+        ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendRevisionRequested(recipientId: string, email: string, senderId: string, orderId: string, reason: string, link: string) {
@@ -139,11 +139,11 @@ export class NotificationService {
         );
 
         // Email
-        await sendEmail(
+        sendEmail(
             email,
             'Revision Requested ✏️',
             emailTemplates.revisionRequested(orderId, reason, link)
-        );
+        ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendOrderCancelled(recipientId: string, email: string, senderId: string | undefined, orderId: string, reason: string, link: string, isDispute: boolean = false) {
@@ -160,11 +160,11 @@ export class NotificationService {
         );
 
         // Email
-        await sendEmail(
+        sendEmail(
             email,
             `${title} ❌`,
             emailTemplates.orderCancelled(orderId, reason, link)
-        );
+        ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendPaymentRequired(recipientId: string, email: string, orderId: string, link: string) {
@@ -178,11 +178,11 @@ export class NotificationService {
         );
 
         // Email
-        await sendEmail(
+        sendEmail(
             email,
             'Action Required: Complete your Influverse Payment',
             `The creator has accepted your offer! To officially start the campaign and secure the timeframe, please complete the payment at: ${link}`
-        );
+        ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendPaymentConfirmed(recipientId: string, email: string, orderId: string, link: string, isBrand: boolean = false) {
@@ -200,18 +200,18 @@ export class NotificationService {
         );
 
         if (isBrand) {
-            await sendEmail(
+            sendEmail(
                 email,
                 `Payment successful — Order #${orderId}`,
                 emailTemplates.paymentConfirmation(orderId, link)
-            );
+            ).catch(err => console.error('Failed to send email:', err));
         } else {
             // For creator, payment confirmation means the order is now created/active
-            await sendEmail(
+            sendEmail(
                 email,
                 `Order #${orderId} created`,
                 emailTemplates.orderCreated(orderId, 'creator', link)
-            );
+            ).catch(err => console.error('Failed to send email:', err));
         }
     }
 }

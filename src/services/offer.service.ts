@@ -14,9 +14,11 @@ export class OfferService {
 
     static async getOffers(query: any) {
         const offers = await Offer.find(query)
-            .populate('brand', 'username')
-            .populate('creator', 'username')
-            .populate('order');
+            .sort({ createdAt: -1 })
+            .populate('brand', 'username profilePhoto')
+            .populate('creator', 'username profilePhoto')
+            .populate('order')
+            .lean();
 
         return offers;
     }

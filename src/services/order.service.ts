@@ -34,8 +34,10 @@ export class OrderService {
 
     static async getOrders(query: any) {
         const orders = await Order.find(query)
-            .populate('brand', 'username')
-            .populate('creator', 'username');
+            .sort({ createdAt: -1 })
+            .populate('brand', 'username profilePhoto')
+            .populate('creator', 'username profilePhoto')
+            .lean();
 
         return orders;
     }

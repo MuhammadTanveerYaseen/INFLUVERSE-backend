@@ -41,11 +41,11 @@ export const forgotPassword = async (req: Request, res: Response) => {
 
         try {
             console.log(`[ForgotPassword] Attempting to send email to: ${user.email}`);
-            await sendEmail(
+            sendEmail(
                 user.email,
                 'Password Reset Request',
                 emailTemplates.passwordReset(resetUrl)
-            );
+            ).catch(err => console.error(`[ForgotPassword] Failed to send email asynchronously: ${err.message}`));
 
             res.status(200).json({ message: 'Email sent' });
         } catch (error: any) {

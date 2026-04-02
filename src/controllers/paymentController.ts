@@ -183,26 +183,26 @@ export const PaymentController = {
             const creatorUser = await User.findById(order.creator);
             if (creatorUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                await NotificationService.sendPaymentConfirmed(
+                NotificationService.sendPaymentConfirmed(
                     creatorUser.id,
                     creatorUser.email,
                     order.id,
                     `${frontendUrl}/dashboard/creator/orders/${order.id}`,
                     false
-                );
+                ).catch(err => console.error(err));
             }
 
             // Notify Brand
             const brandUser = await User.findById(order.brand);
             if (brandUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                await NotificationService.sendPaymentConfirmed(
+                NotificationService.sendPaymentConfirmed(
                     brandUser.id,
                     brandUser.email,
                     order.id,
                     `${frontendUrl}/dashboard/brand/orders/${order.id}`,
                     true
-                );
+                ).catch(err => console.error(err));
             }
 
             res.json({ success: true, order: updatedOrder });

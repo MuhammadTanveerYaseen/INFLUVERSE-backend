@@ -103,13 +103,13 @@ export const submitDeliverable = async (req: Request | any, res: Response) => {
         const brandUser = await User.findById(order.brand);
         if (brandUser) {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            await NotificationService.sendContentDelivered(
+            NotificationService.sendContentDelivered(
                 brandUser.id,
                 brandUser.email,
                 userId,
                 order.id,
                 `${frontendUrl}/dashboard/brand/orders/${order.id}`
-            );
+            ).catch(err => console.error(err));
         }
 
         res.json(updatedOrder);
@@ -149,13 +149,13 @@ export const reviewDeliverable = async (req: Request | any, res: Response) => {
             const creatorUser = await User.findById(order.creator);
             if (creatorUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                await NotificationService.sendOrderApproved(
+                NotificationService.sendOrderApproved(
                     creatorUser.id,
                     creatorUser.email,
                     userId,
                     order.id,
                     `${frontendUrl}/dashboard/creator/orders/${order.id}`
-                );
+                ).catch(err => console.error(err));
             }
 
             // Start the 7-day Escrow Release Clock
@@ -175,14 +175,14 @@ export const reviewDeliverable = async (req: Request | any, res: Response) => {
             const creatorUser = await User.findById(order.creator);
             if (creatorUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                await NotificationService.sendRevisionRequested(
+                NotificationService.sendRevisionRequested(
                     creatorUser.id,
                     creatorUser.email,
                     userId,
                     order.id,
                     displayReason,
                     `${frontendUrl}/dashboard/creator/orders/${order.id}`
-                );
+                ).catch(err => console.error(err));
             }
 
         } else if (action === 'dispute') {
@@ -192,7 +192,7 @@ export const reviewDeliverable = async (req: Request | any, res: Response) => {
             const creatorUser = await User.findById(order.creator);
             if (creatorUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                await NotificationService.sendOrderCancelled(
+                NotificationService.sendOrderCancelled(
                     creatorUser.id,
                     creatorUser.email,
                     userId,
@@ -200,7 +200,7 @@ export const reviewDeliverable = async (req: Request | any, res: Response) => {
                     displayReason,
                     `${frontendUrl}/dashboard/creator/orders/${order.id}`,
                     true
-                );
+                ).catch(err => console.error(err));
             }
         }
 
@@ -254,14 +254,14 @@ export const createPackageOrder = async (req: Request | any, res: Response) => {
         const creatorUser = await User.findById(creatorId);
         if (creatorUser) {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            await NotificationService.sendOfferReceived(
+            NotificationService.sendOfferReceived(
                 creatorUser.id,
                 creatorUser.email,
                 userId.toString(),
                 req.user.username,
                 numericPrice,
                 `${frontendUrl}/dashboard/creator/offers`
-            );
+            ).catch(err => console.error(err));
         }
 
         // Return the offer so frontend can redirect to chat
@@ -300,14 +300,14 @@ export const cancelOrder = async (req: Request | any, res: Response) => {
         if (recipientUser) {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
             const roleStr = order.brand.toString() === userId.toString() ? 'creator' : 'brand';
-            await NotificationService.sendOrderCancelled(
+            NotificationService.sendOrderCancelled(
                 recipientUser.id,
                 recipientUser.email,
                 userId.toString(),
                 order.id,
                 reason || "Order cancelled by other party",
                 `${frontendUrl}/dashboard/${roleStr}/orders/${order.id}`
-            );
+            ).catch(err => console.error(err));
         }
 
         res.json({ message: 'Order cancelled', order });

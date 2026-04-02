@@ -32,12 +32,14 @@ const orderSchema: Schema = new Schema({
     brand: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+        index: true
     },
     creator: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+        index: true
     },
     price: { type: Number, required: true },
     platformFee: { type: Number, required: true },

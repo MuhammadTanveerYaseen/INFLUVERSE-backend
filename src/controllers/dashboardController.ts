@@ -19,8 +19,7 @@ export const getActionsCount = async (req: Request | any, res: Response) => {
                     brand: userObjectId,
                     $or: [
                         { status: 'pending', sender: { $ne: userObjectId } },
-                        { status: 'countered', sender: userObjectId },
-                        { status: 'accepted', paid: false }
+                        { status: 'countered', sender: userObjectId }
                     ]
                 }),
                 Order.countDocuments({
@@ -34,8 +33,7 @@ export const getActionsCount = async (req: Request | any, res: Response) => {
                     creator: userObjectId,
                     $or: [
                         { status: 'pending', sender: { $ne: userObjectId } },
-                        { status: 'countered', sender: userObjectId },
-                        { status: 'accepted', paid: false }
+                        { status: 'countered', sender: userObjectId }
                     ]
                 }),
                 Order.countDocuments({
