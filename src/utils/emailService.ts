@@ -24,7 +24,8 @@ const wrapEmail = (title: string, content: string, ctaLabel?: string, ctaHref?: 
                 <img src="https://influverse-frontend.vercel.app/horizontal-logo.svg" 
                      alt="INFLUVERSE" 
                      height="32" 
-                     style="display:block;height:32px;width:auto;border:0;outline:none;font-family:Arial,sans-serif;font-size:24px;font-weight:900;color:#0271e0;letter-spacing:-1px;" />
+                     width="150"
+                     style="display:block;height:32px;width:150px;border:0;outline:none;font-family:Arial,sans-serif;font-size:24px;font-weight:900;color:#0271e0;letter-spacing:-1px;image-rendering:-webkit-optimize-contrast;" />
               </a>
             </td>
           </tr>

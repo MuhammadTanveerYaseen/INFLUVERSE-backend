@@ -9,6 +9,8 @@ import Transaction from '../models/Transaction';
 import Chat from '../models/Chat';
 import Message from '../models/Message';
 import BrandProfile from '../models/BrandProfile';
+import redisClient from '../config/redis';
+
 
 // @desc    Get All Users (Admin)
 // @route   GET /api/admin/users
@@ -121,6 +123,13 @@ export const verifyCreator = async (req: Request, res: Response) => {
     await creatorUser.save();
     const updatedProfile = await profile.save();
 
+    if (redisClient.isReady) {
+        const keys = await redisClient.keys('creators_*');
+        if (keys.length > 0) {
+            await redisClient.del(keys);
+        }
+    }
+
     res.json({ message: `Creator profile ${status}`, profile: updatedProfile });
 };
 
@@ -144,6 +153,13 @@ export const toggleUserVerification = async (req: Request, res: Response) => {
                 { user: user._id },
                 { verified: user.isVerified }
             );
+
+            if (redisClient.isReady) {
+                const keys = await redisClient.keys('creators_*');
+                if (keys.length > 0) {
+                    await redisClient.del(keys);
+                }
+            }
         }
 
         res.json({ message: `User verification set to ${user.isVerified}`, isVerified: user.isVerified });
@@ -167,11 +183,26 @@ export const toggleCreatorFeatured = async (req: Request, res: Response) => {
             }
             profileByUser.isFeatured = !profileByUser.isFeatured;
             await profileByUser.save();
+            
+            if (redisClient.isReady) {
+                const keys = await redisClient.keys('creators_*');
+                if (keys.length > 0) {
+                    await redisClient.del(keys);
+                }
+            }
+            
             return res.json({ message: `Featured status set to ${profileByUser.isFeatured}`, isFeatured: profileByUser.isFeatured });
         }
 
         profile.isFeatured = !profile.isFeatured;
         await profile.save();
+
+        if (redisClient.isReady) {
+            const keys = await redisClient.keys('creators_*');
+            if (keys.length > 0) {
+                await redisClient.del(keys);
+            }
+        }
 
         res.json({ message: `Featured status set to ${profile.isFeatured}`, isFeatured: profile.isFeatured });
     } catch (error: any) {
