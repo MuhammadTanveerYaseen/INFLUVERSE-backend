@@ -18,15 +18,10 @@ const BrandProfile_1 = __importDefault(require("../models/BrandProfile"));
 const Order_1 = __importDefault(require("../models/Order"));
 const Offer_1 = __importDefault(require("../models/Offer"));
 const CreatorProfile_1 = __importDefault(require("../models/CreatorProfile"));
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const emailService_1 = require("../utils/emailService");
 const mongoose_1 = __importDefault(require("mongoose"));
-const generateToken = (id, role, username, email, status, isVerified, name, rejectionReason) => {
-    return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
-        expiresIn: '30d',
-    });
-};
+const authController_1 = require("./authController");
 // @desc    Register a new Brand
 // @route   POST /api/brands/register
 // @access  Public
@@ -90,6 +85,7 @@ const getBrandProfile = (req, res) => __awaiter(void 0, void 0, void 0, function
             username: user.username,
             email: user.email,
             role: user.role,
+            profileImage: (profile === null || profile === void 0 ? void 0 : profile.logo) || '',
             profileData: profile
         });
     }
@@ -133,7 +129,8 @@ const updateBrandProfile = (req, res) => __awaiter(void 0, void 0, void 0, funct
             username: updatedUser.username,
             email: updatedUser.email,
             role: updatedUser.role,
-            token: generateToken(updatedUser._id.toString(), updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason),
+            profileImage: (updatedProfile === null || updatedProfile === void 0 ? void 0 : updatedProfile.logo) || '',
+            token: (0, authController_1.generateToken)(updatedUser._id.toString(), updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason, updatedProfile === null || updatedProfile === void 0 ? void 0 : updatedProfile.logo),
             profileData: updatedProfile
         });
     }

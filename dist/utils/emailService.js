@@ -31,16 +31,14 @@ const wrapEmail = (title, content, ctaLabel, ctaHref) => `
           <!-- Logo Header -->
           <tr>
             <td align="center" style="background-color:#ffffff;border-radius:20px 20px 0 0;padding:32px 40px 20px;border-bottom:1px solid #EBEBF0;">
-              <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
-                <tr>
-                  <td style="vertical-align:middle;padding-right:10px;">
-                    <div style="background-color:#0271e0;width:32px;height:32px;border-radius:8px;text-align:center;line-height:32px;color:#ffffff;font-size:20px;font-weight:900;">✦</div>
-                  </td>
-                  <td style="vertical-align:middle;">
-                    <span style="font-size:22px;font-weight:900;color:#1a1a2e;letter-spacing:-0.8px;text-transform:uppercase;font-family:Arial,sans-serif;">Influverse</span>
-                  </td>
-                </tr>
-              </table>
+              <a href="${process.env.FRONTEND_URL || 'https://influverse.ch'}" style="text-decoration:none;">
+                <!-- Using Vercel URL for better reliability in various email clients -->
+                <img src="https://influverse-frontend.vercel.app/horizontal-logo.svg" 
+                     alt="INFLUVERSE" 
+                     height="32" 
+                     width="150"
+                     style="display:block;height:32px;width:150px;border:0;outline:none;font-family:Arial,sans-serif;font-size:24px;font-weight:900;color:#0271e0;letter-spacing:-1px;image-rendering:-webkit-optimize-contrast;" />
+              </a>
             </td>
           </tr>
 
@@ -79,11 +77,16 @@ const wrapEmail = (title, content, ctaLabel, ctaHref) => `
 </html>
 `;
 const transporter = nodemailer_1.default.createTransport({
-    service: 'gmail',
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT || '587'),
+    secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
+    tls: {
+        rejectUnauthorized: false // Helps with some shared hosting providers
+    }
 });
 const sendEmail = (to, subjectOrTemplate, htmlStr) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -93,17 +96,19 @@ const sendEmail = (to, subjectOrTemplate, htmlStr) => __awaiter(void 0, void 0, 
         const isObj2 = typeof subjectOrTemplate === 'object' && subjectOrTemplate !== null;
         const subject = isObj2 ? subjectOrTemplate.subject : (isObj3 ? htmlStr.subject : subjectOrTemplate);
         const html = isObj3 ? htmlStr.html : (isObj2 ? subjectOrTemplate.html : htmlStr);
+        console.log(`[EmailService] Sending email to: ${to} | Subject: ${subject}`);
         const mailOptions = {
-            from: '"Influverse Team" <team@influverse.ch>',
+            from: `"Influverse Team" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
             to,
             subject,
             html,
         };
         const info = yield transporter.sendMail(mailOptions);
-        console.log(`Email sent: ${info.messageId}`);
+        console.log(`[EmailService] Success! Message ID: ${info.messageId}`);
     }
     catch (error) {
-        console.error(`Error sending email: ${error}`);
+        console.error(`[EmailService] CRITICAL Error sending email: ${error}`);
+        throw error; // Rethrow so caller knows it failed
     }
 });
 exports.sendEmail = sendEmail;

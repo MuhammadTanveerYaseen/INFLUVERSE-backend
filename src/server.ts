@@ -68,9 +68,40 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 
 // Error Handling Middleware
+import fs from 'fs';
+import path from 'path';
+
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     console.error(err.stack);
-    res.status(500).send('Something broke!');
+    
+    // Log to a file for hard-to-track upload issues!
+    try {
+        fs.appendFileSync(
+            path.join(__dirname, 'debug_upload_error.txt'), 
+            `[${new Date().toISOString()}] Error Code: ${err.code} | Message: ${err.message} | HTTP: ${err.http_code} | Multer: ${err.field} \n${err.stack}\n\n`
+        );
+    } catch (e) {}
+    
+    // Handle Multer errors specially
+    if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: 'File is too large. Maximum allowed size is 50MB.' });
+    }
+    
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({ message: 'Unexpected field or too many files uploaded.' });
+    }
+
+    // Handle generic payload too large from express
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ message: 'Request payload is too large.' });
+    }
+
+    // If Cloudinary specifically rejects it, check for HTTP code or specific structure
+    if (err.http_code && err.message) {
+        return res.status(err.http_code).json({ message: `Cloudinary Error: ${err.message}` });
+    }
+
+    res.status(500).json({ message: err.message || 'Internal Server Error' });
 });
 
 const PORT = process.env.PORT || 5000;

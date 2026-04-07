@@ -8,8 +8,8 @@ const onlineUsers = new Map(); // userId -> socketId (simplified, assumes one se
 const initSocket = (server) => {
     io = new socket_io_1.Server(server, {
         cors: {
-            origin: [process.env.FRONTEND_URL || "http://localhost:3000", "http://127.0.0.1:3000"],
-            methods: ["GET", "POST"],
+            origin: true,
+            methods: ["GET", "POST", "OPTIONS"],
             credentials: true
         }
     });

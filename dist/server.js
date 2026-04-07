@@ -28,12 +28,7 @@ const httpServer = (0, http_1.createServer)(app);
 (0, socket_service_1.initSocket)(httpServer);
 // Middleware
 app.use((0, cors_1.default)({
-    origin: [
-        process.env.FRONTEND_URL || "http://localhost:3000",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://influverse-frontend.vercel.app"
-    ],
+    origin: true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
@@ -73,7 +68,18 @@ app.use((req, res, next) => {
 // Error Handling Middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
-    res.status(500).send('Something broke!');
+    // Handle Multer errors specially
+    if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: 'File is too large. Maximum allowed size is 50MB.' });
+    }
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({ message: 'Unexpected field or too many files uploaded.' });
+    }
+    // Handle generic payload too large from express
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ message: 'Request payload is too large.' });
+    }
+    res.status(500).json({ message: err.message || 'Internal Server Error' });
 });
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {

@@ -45,8 +45,10 @@ class OrderService {
     static getOrders(query) {
         return __awaiter(this, void 0, void 0, function* () {
             const orders = yield Order_1.default.find(query)
-                .populate('brand', 'username')
-                .populate('creator', 'username');
+                .sort({ createdAt: -1 })
+                .populate('brand', 'username profilePhoto')
+                .populate('creator', 'username profilePhoto')
+                .lean();
             return orders;
         });
     }

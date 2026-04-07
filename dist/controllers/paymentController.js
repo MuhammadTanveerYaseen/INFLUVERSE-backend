@@ -162,13 +162,13 @@ exports.PaymentController = {
             const creatorUser = yield User_1.default.findById(order.creator);
             if (creatorUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                yield notification_service_1.NotificationService.sendPaymentConfirmed(creatorUser.id, creatorUser.email, order.id, `${frontendUrl}/dashboard/creator/orders/${order.id}`, false);
+                notification_service_1.NotificationService.sendPaymentConfirmed(creatorUser.id, creatorUser.email, order.id, `${frontendUrl}/dashboard/creator/orders/${order.id}`, false).catch(err => console.error(err));
             }
             // Notify Brand
             const brandUser = yield User_1.default.findById(order.brand);
             if (brandUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                yield notification_service_1.NotificationService.sendPaymentConfirmed(brandUser.id, brandUser.email, order.id, `${frontendUrl}/dashboard/brand/orders/${order.id}`, true);
+                notification_service_1.NotificationService.sendPaymentConfirmed(brandUser.id, brandUser.email, order.id, `${frontendUrl}/dashboard/brand/orders/${order.id}`, true).catch(err => console.error(err));
             }
             res.json({ success: true, order: updatedOrder });
         }

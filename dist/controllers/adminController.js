@@ -21,20 +21,29 @@ const PlatformSettings_1 = __importDefault(require("../models/PlatformSettings")
 const Transaction_1 = __importDefault(require("../models/Transaction"));
 const Chat_1 = __importDefault(require("../models/Chat"));
 const Message_1 = __importDefault(require("../models/Message"));
+const BrandProfile_1 = __importDefault(require("../models/BrandProfile"));
+const redis_1 = __importDefault(require("../config/redis"));
 // @desc    Get All Users (Admin)
 // @route   GET /api/admin/users
 // @access  Private (Admin)
 const getUsers = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const users = yield User_1.default.find().select('-password').lean(); // Use lean for faster processing
-        const usersWithFeatured = yield Promise.all(users.map((u) => __awaiter(void 0, void 0, void 0, function* () {
+        const usersWithProfile = yield Promise.all(users.map((u) => __awaiter(void 0, void 0, void 0, function* () {
+            let profileImage = '';
+            let isFeatured = false;
             if (u.role === 'creator') {
-                const profile = yield CreatorProfile_1.default.findOne({ user: u._id }).select('isFeatured');
-                return Object.assign(Object.assign({}, u), { isFeatured: (profile === null || profile === void 0 ? void 0 : profile.isFeatured) || false });
+                const profile = yield CreatorProfile_1.default.findOne({ user: u._id }).select('profileImage isFeatured');
+                profileImage = (profile === null || profile === void 0 ? void 0 : profile.profileImage) || '';
+                isFeatured = (profile === null || profile === void 0 ? void 0 : profile.isFeatured) || false;
             }
-            return u;
+            else if (u.role === 'brand') {
+                const profile = yield BrandProfile_1.default.findOne({ user: u._id }).select('logo');
+                profileImage = (profile === null || profile === void 0 ? void 0 : profile.logo) || '';
+            }
+            return Object.assign(Object.assign({}, u), { profileImage, isFeatured });
         })));
-        res.json(usersWithFeatured);
+        res.json(usersWithProfile);
     }
     catch (error) {
         res.status(500).json({ message: error.message });
@@ -120,6 +129,12 @@ const verifyCreator = (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
     yield creatorUser.save();
     const updatedProfile = yield profile.save();
+    if (redis_1.default.isReady) {
+        const keys = yield redis_1.default.keys('creators_*');
+        if (keys.length > 0) {
+            yield redis_1.default.del(keys);
+        }
+    }
     res.json({ message: `Creator profile ${status}`, profile: updatedProfile });
 });
 exports.verifyCreator = verifyCreator;
@@ -138,6 +153,12 @@ const toggleUserVerification = (req, res) => __awaiter(void 0, void 0, void 0, f
         // If creator, also update profile for consistency
         if (user.role === 'creator') {
             yield CreatorProfile_1.default.findOneAndUpdate({ user: user._id }, { verified: user.isVerified });
+            if (redis_1.default.isReady) {
+                const keys = yield redis_1.default.keys('creators_*');
+                if (keys.length > 0) {
+                    yield redis_1.default.del(keys);
+                }
+            }
         }
         res.json({ message: `User verification set to ${user.isVerified}`, isVerified: user.isVerified });
     }
@@ -161,10 +182,22 @@ const toggleCreatorFeatured = (req, res) => __awaiter(void 0, void 0, void 0, fu
             }
             profileByUser.isFeatured = !profileByUser.isFeatured;
             yield profileByUser.save();
+            if (redis_1.default.isReady) {
+                const keys = yield redis_1.default.keys('creators_*');
+                if (keys.length > 0) {
+                    yield redis_1.default.del(keys);
+                }
+            }
             return res.json({ message: `Featured status set to ${profileByUser.isFeatured}`, isFeatured: profileByUser.isFeatured });
         }
         profile.isFeatured = !profile.isFeatured;
         yield profile.save();
+        if (redis_1.default.isReady) {
+            const keys = yield redis_1.default.keys('creators_*');
+            if (keys.length > 0) {
+                yield redis_1.default.del(keys);
+            }
+        }
         res.json({ message: `Featured status set to ${profile.isFeatured}`, isFeatured: profile.isFeatured });
     }
     catch (error) {
@@ -276,10 +309,22 @@ const getDashboardOverview = (req, res) => __awaiter(void 0, void 0, void 0, fun
         const approvedOrdersList = yield Order_1.default.find({ status: 'approved' });
         const totalRevenue = approvedOrdersList.reduce((sum, o) => sum + (o.platformFee || 0), 0);
         const totalEarnings = approvedOrdersList.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-        const recentSignups = yield User_1.default.find()
+        const signups = yield User_1.default.find()
             .select('username email role createdAt')
             .sort({ createdAt: -1 })
             .limit(5);
+        const recentSignups = yield Promise.all(signups.map((u) => __awaiter(void 0, void 0, void 0, function* () {
+            let profileImage = '';
+            if (u.role === 'creator') {
+                const profile = yield CreatorProfile_1.default.findOne({ user: u._id }).select('profileImage');
+                profileImage = (profile === null || profile === void 0 ? void 0 : profile.profileImage) || '';
+            }
+            else if (u.role === 'brand') {
+                const profile = yield BrandProfile_1.default.findOne({ user: u._id }).select('logo');
+                profileImage = (profile === null || profile === void 0 ? void 0 : profile.logo) || '';
+            }
+            return Object.assign(Object.assign({}, u.toObject()), { profileImage });
+        })));
         const recentOrders = yield Order_1.default.find()
             .populate('brand', 'username')
             .populate('creator', 'username')
@@ -324,10 +369,27 @@ exports.getDashboardOverview = getDashboardOverview;
 const getReports = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const reports = yield Report_1.default.find()
-            .populate('reporter', 'username email')
-            .populate('reportedUser', 'username email')
+            .populate('reporter', 'username email role')
+            .populate('reportedUser', 'username email role')
             .sort({ createdAt: -1 });
-        res.json(reports);
+        // Add profile photo from CreatorProfile/BrandProfile for reportedUser
+        const enhancedReports = yield Promise.all(reports.map((report) => __awaiter(void 0, void 0, void 0, function* () {
+            const rObj = report.toObject();
+            if (rObj.reportedUser) {
+                let profileImage = '';
+                if (rObj.reportedUser.role === 'creator') {
+                    const profile = yield CreatorProfile_1.default.findOne({ user: rObj.reportedUser._id }).select('profileImage');
+                    profileImage = (profile === null || profile === void 0 ? void 0 : profile.profileImage) || '';
+                }
+                else if (rObj.reportedUser.role === 'brand') {
+                    const profile = yield BrandProfile_1.default.findOne({ user: rObj.reportedUser._id }).select('logo');
+                    profileImage = (profile === null || profile === void 0 ? void 0 : profile.logo) || '';
+                }
+                rObj.reportedUser.profileImage = profileImage;
+            }
+            return rObj;
+        })));
+        res.json(enhancedReports);
     }
     catch (error) {
         res.status(500).json({ message: error.message });

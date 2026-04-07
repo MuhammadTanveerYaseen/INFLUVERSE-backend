@@ -101,7 +101,7 @@ const submitDeliverable = (req, res) => __awaiter(void 0, void 0, void 0, functi
         const brandUser = yield User_1.default.findById(order.brand);
         if (brandUser) {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            yield notification_service_1.NotificationService.sendContentDelivered(brandUser.id, brandUser.email, userId, order.id, `${frontendUrl}/dashboard/brand/orders/${order.id}`);
+            notification_service_1.NotificationService.sendContentDelivered(brandUser.id, brandUser.email, userId, order.id, `${frontendUrl}/dashboard/brand/orders/${order.id}`).catch(err => console.error(err));
         }
         res.json(updatedOrder);
     }
@@ -134,7 +134,7 @@ const reviewDeliverable = (req, res) => __awaiter(void 0, void 0, void 0, functi
             const creatorUser = yield User_1.default.findById(order.creator);
             if (creatorUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                yield notification_service_1.NotificationService.sendOrderApproved(creatorUser.id, creatorUser.email, userId, order.id, `${frontendUrl}/dashboard/creator/orders/${order.id}`);
+                notification_service_1.NotificationService.sendOrderApproved(creatorUser.id, creatorUser.email, userId, order.id, `${frontendUrl}/dashboard/creator/orders/${order.id}`).catch(err => console.error(err));
             }
             // Start the 7-day Escrow Release Clock
             yield Transaction_1.default.updateMany({
@@ -150,7 +150,7 @@ const reviewDeliverable = (req, res) => __awaiter(void 0, void 0, void 0, functi
             const creatorUser = yield User_1.default.findById(order.creator);
             if (creatorUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                yield notification_service_1.NotificationService.sendRevisionRequested(creatorUser.id, creatorUser.email, userId, order.id, displayReason, `${frontendUrl}/dashboard/creator/orders/${order.id}`);
+                notification_service_1.NotificationService.sendRevisionRequested(creatorUser.id, creatorUser.email, userId, order.id, displayReason, `${frontendUrl}/dashboard/creator/orders/${order.id}`).catch(err => console.error(err));
             }
         }
         else if (action === 'dispute') {
@@ -159,7 +159,7 @@ const reviewDeliverable = (req, res) => __awaiter(void 0, void 0, void 0, functi
             const creatorUser = yield User_1.default.findById(order.creator);
             if (creatorUser) {
                 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-                yield notification_service_1.NotificationService.sendOrderCancelled(creatorUser.id, creatorUser.email, userId, order.id, displayReason, `${frontendUrl}/dashboard/creator/orders/${order.id}`, true);
+                notification_service_1.NotificationService.sendOrderCancelled(creatorUser.id, creatorUser.email, userId, order.id, displayReason, `${frontendUrl}/dashboard/creator/orders/${order.id}`, true).catch(err => console.error(err));
             }
         }
         res.json(order);
@@ -201,7 +201,7 @@ const createPackageOrder = (req, res) => __awaiter(void 0, void 0, void 0, funct
         const creatorUser = yield User_1.default.findById(creatorId);
         if (creatorUser) {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            yield notification_service_1.NotificationService.sendOfferReceived(creatorUser.id, creatorUser.email, userId.toString(), req.user.username, numericPrice, `${frontendUrl}/dashboard/creator/offers`);
+            notification_service_1.NotificationService.sendOfferReceived(creatorUser.id, creatorUser.email, userId.toString(), req.user.username, numericPrice, `${frontendUrl}/dashboard/creator/offers`).catch(err => console.error(err));
         }
         // Return the offer so frontend can redirect to chat
         res.status(201).json({
@@ -234,7 +234,7 @@ const cancelOrder = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         if (recipientUser) {
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
             const roleStr = order.brand.toString() === userId.toString() ? 'creator' : 'brand';
-            yield notification_service_1.NotificationService.sendOrderCancelled(recipientUser.id, recipientUser.email, userId.toString(), order.id, reason || "Order cancelled by other party", `${frontendUrl}/dashboard/${roleStr}/orders/${order.id}`);
+            notification_service_1.NotificationService.sendOrderCancelled(recipientUser.id, recipientUser.email, userId.toString(), order.id, reason || "Order cancelled by other party", `${frontendUrl}/dashboard/${roleStr}/orders/${order.id}`).catch(err => console.error(err));
         }
         res.json({ message: 'Order cancelled', order });
     }

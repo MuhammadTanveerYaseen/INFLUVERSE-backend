@@ -43,7 +43,7 @@ class NotificationService {
             // DB Notification
             yield this.createNotification(recipientId, 'New Offer Received', `You received an offer of $${price} from ${brandName}.`, 'offer', link, senderId);
             // Email
-            yield (0, emailService_1.sendEmail)(email, 'New Offer Received on Influverse', emailService_1.emailTemplates.offerReceived(brandName, price, link));
+            (0, emailService_1.sendEmail)(email, 'New Offer Received on Influverse', emailService_1.emailTemplates.offerReceived(brandName, price, link)).catch(err => console.error('Failed to send email:', err));
         });
     }
     static sendOfferStatusUpdate(recipientId, email, senderId, creatorName, status, link) {
@@ -52,7 +52,7 @@ class NotificationService {
             // DB Notification
             yield this.createNotification(recipientId, title, `${creatorName} has ${status} your offer.`, 'offer', link, senderId);
             // Email
-            yield (0, emailService_1.sendEmail)(email, title, emailService_1.emailTemplates.offerStatusUpdate(creatorName, status, link));
+            (0, emailService_1.sendEmail)(email, title, emailService_1.emailTemplates.offerStatusUpdate(creatorName, status, link)).catch(err => console.error('Failed to send email:', err));
         });
     }
     static sendOrderCreated(recipientId, email, orderId, role, link) {
@@ -60,7 +60,7 @@ class NotificationService {
             // DB Notification
             yield this.createNotification(recipientId, 'Order Started', `Order #${orderId} has been created.`, 'order', link);
             // Email
-            yield (0, emailService_1.sendEmail)(email, `Order #${orderId} Started`, emailService_1.emailTemplates.orderCreated(orderId, role, link));
+            (0, emailService_1.sendEmail)(email, `Order #${orderId} Started`, emailService_1.emailTemplates.orderCreated(orderId, role, link)).catch(err => console.error('Failed to send email:', err));
         });
     }
     static sendContentDelivered(recipientId, email, senderId, orderId, link) {
@@ -68,7 +68,7 @@ class NotificationService {
             // DB Notification
             yield this.createNotification(recipientId, 'Content Delivered', `Content for Order #${orderId} has been submitted for review.`, 'order', link, senderId);
             // Email
-            yield (0, emailService_1.sendEmail)(email, 'Order Delivered - Review Needed', emailService_1.emailTemplates.contentDelivered(orderId, link));
+            (0, emailService_1.sendEmail)(email, 'Order Delivered - Review Needed', emailService_1.emailTemplates.contentDelivered(orderId, link)).catch(err => console.error('Failed to send email:', err));
         });
     }
     static sendOrderApproved(recipientId, email, senderId, orderId, link) {
@@ -76,7 +76,7 @@ class NotificationService {
             // DB Notification
             yield this.createNotification(recipientId, 'Order Approved', `Your submission for Order #${orderId} has been approved!`, 'order', link, senderId);
             // Email
-            yield (0, emailService_1.sendEmail)(email, 'Order Approved!', emailService_1.emailTemplates.orderApproved(orderId, link));
+            (0, emailService_1.sendEmail)(email, 'Order Approved!', emailService_1.emailTemplates.orderApproved(orderId, link)).catch(err => console.error('Failed to send email:', err));
         });
     }
     static sendRevisionRequested(recipientId, email, senderId, orderId, reason, link) {
@@ -84,7 +84,7 @@ class NotificationService {
             // DB Notification
             yield this.createNotification(recipientId, 'Revision Requested', `Revision requested for Order #${orderId}: ${reason}`, 'order', link, senderId);
             // Email
-            yield (0, emailService_1.sendEmail)(email, 'Revision Requested ✏️', emailService_1.emailTemplates.revisionRequested(orderId, reason, link));
+            (0, emailService_1.sendEmail)(email, 'Revision Requested ✏️', emailService_1.emailTemplates.revisionRequested(orderId, reason, link)).catch(err => console.error('Failed to send email:', err));
         });
     }
     static sendOrderCancelled(recipientId_1, email_1, senderId_1, orderId_1, reason_1, link_1) {
@@ -94,7 +94,7 @@ class NotificationService {
             yield this.createNotification(recipientId, title, `${title} for Order #${orderId}. Reason: ${reason}`, 'order', // or 'system'
             link, senderId);
             // Email
-            yield (0, emailService_1.sendEmail)(email, `${title} ❌`, emailService_1.emailTemplates.orderCancelled(orderId, reason, link));
+            (0, emailService_1.sendEmail)(email, `${title} ❌`, emailService_1.emailTemplates.orderCancelled(orderId, reason, link)).catch(err => console.error('Failed to send email:', err));
         });
     }
     static sendPaymentRequired(recipientId, email, orderId, link) {
@@ -102,7 +102,7 @@ class NotificationService {
             // DB Notification
             yield this.createNotification(recipientId, 'Payment Required', `Creator accepted! Please complete payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} to start the campaign.`, 'payment', link);
             // Email
-            yield (0, emailService_1.sendEmail)(email, 'Action Required: Complete your Influverse Payment', `The creator has accepted your offer! To officially start the campaign and secure the timeframe, please complete the payment at: ${link}`);
+            (0, emailService_1.sendEmail)(email, 'Action Required: Complete your Influverse Payment', `The creator has accepted your offer! To officially start the campaign and secure the timeframe, please complete the payment at: ${link}`).catch(err => console.error('Failed to send email:', err));
         });
     }
     static sendPaymentConfirmed(recipientId_1, email_1, orderId_1, link_1) {
@@ -113,11 +113,11 @@ class NotificationService {
                 : `Payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} has been secured in escrow. You can now start the campaign!`;
             yield this.createNotification(recipientId, title, message, 'payment', link);
             if (isBrand) {
-                yield (0, emailService_1.sendEmail)(email, `Payment successful — Order #${orderId}`, emailService_1.emailTemplates.paymentConfirmation(orderId, link));
+                (0, emailService_1.sendEmail)(email, `Payment successful — Order #${orderId}`, emailService_1.emailTemplates.paymentConfirmation(orderId, link)).catch(err => console.error('Failed to send email:', err));
             }
             else {
                 // For creator, payment confirmation means the order is now created/active
-                yield (0, emailService_1.sendEmail)(email, `Order #${orderId} created`, emailService_1.emailTemplates.orderCreated(orderId, 'creator', link));
+                (0, emailService_1.sendEmail)(email, `Order #${orderId} created`, emailService_1.emailTemplates.orderCreated(orderId, 'creator', link)).catch(err => console.error('Failed to send email:', err));
             }
         });
     }

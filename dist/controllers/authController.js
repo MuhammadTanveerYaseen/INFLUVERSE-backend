@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.authUser = exports.deleteAccount = exports.changePassword = exports.resetPassword = exports.forgotPassword = void 0;
+exports.authUser = exports.deleteAccount = exports.generateToken = exports.changePassword = exports.resetPassword = exports.forgotPassword = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
 const crypto_1 = __importDefault(require("crypto"));
@@ -26,12 +26,12 @@ const CreatorProfile_1 = __importDefault(require("../models/CreatorProfile"));
 // @access  Public
 const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { email } = req.body;
-    console.log(`[ForgotPassword] Request for: ${email}`);
+    const normalizedEmail = email.toLowerCase().trim();
+    console.log(`[ForgotPassword] Request for: ${normalizedEmail}`);
     try {
-        const user = yield User_1.default.findOne({ email });
+        const user = yield User_1.default.findOne({ email: normalizedEmail });
         if (!user) {
-            // Security: Don't reveal if user exists
-            return res.status(200).json({ message: 'Email sent' });
+            return res.status(404).json({ message: 'No account found with this email address' });
         }
         // Generate Token
         const resetToken = crypto_1.default.randomBytes(20).toString('hex');
@@ -45,13 +45,17 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
         yield User_1.default.findByIdAndUpdate(user._id || user.id, { resetPasswordToken, resetPasswordExpire });
         const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
         try {
-            yield (0, emailService_1.sendEmail)(user.email, 'Password Reset Request', emailService_1.emailTemplates.passwordReset(resetUrl));
+            console.log(`[ForgotPassword] Attempting to send email to: ${user.email}`);
+            (0, emailService_1.sendEmail)(user.email, 'Password Reset Request', emailService_1.emailTemplates.passwordReset(resetUrl)).catch(err => console.error(`[ForgotPassword] Failed to send email asynchronously: ${err.message}`));
             res.status(200).json({ message: 'Email sent' });
         }
         catch (error) {
-            console.error(error);
+            console.error(`[ForgotPassword] Failed to send email: ${error.message}`);
             yield User_1.default.findByIdAndUpdate(user._id || user.id, { resetPasswordToken: null, resetPasswordExpire: null });
-            return res.status(500).json({ message: 'Email could not be sent' });
+            return res.status(500).json({
+                message: 'Email could not be sent',
+                error: error.message
+            });
         }
     }
     catch (error) {
@@ -117,11 +121,12 @@ const changePassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
     }
 });
 exports.changePassword = changePassword;
-const generateToken = (id, role, username, email, status, isVerified, name, rejectionReason) => {
-    return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
+const generateToken = (id, role, username, email, status, isVerified, name, rejectionReason, profileImage) => {
+    return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, name, rejectionReason, profileImage }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '30d',
     });
 };
+exports.generateToken = generateToken;
 // @desc    Delete Account
 // @route   DELETE /api/auth/delete-account
 // @access  Private
@@ -148,8 +153,18 @@ exports.deleteAccount = deleteAccount;
 // @access  Public
 const authUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, password } = req.body;
-    const user = yield User_1.default.findOne({ email });
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = yield User_1.default.findOne({ email: normalizedEmail });
     if (user && user.password && (yield bcryptjs_1.default.compare(password, user.password))) {
+        let profileImage = '';
+        if (user.role === 'creator') {
+            const profile = yield CreatorProfile_1.default.findOne({ user: user._id });
+            profileImage = (profile === null || profile === void 0 ? void 0 : profile.profileImage) || '';
+        }
+        else if (user.role === 'brand') {
+            const profile = yield BrandProfile_1.default.findOne({ user: user._id });
+            profileImage = (profile === null || profile === void 0 ? void 0 : profile.logo) || '';
+        }
         res.json({
             _id: user._id || user.id,
             name: user.name,
@@ -159,7 +174,8 @@ const authUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             status: user.status,
             isVerified: user.isVerified,
             rejectionReason: user.rejectionReason,
-            token: generateToken((user.id || user._id).toString(), user.role, user.username, user.email, user.status, user.isVerified, user.name, user.rejectionReason || undefined),
+            profileImage,
+            token: (0, exports.generateToken)((user.id || user._id).toString(), user.role, user.username, user.email, user.status, user.isVerified, user.name, user.rejectionReason || undefined, profileImage),
         });
     }
     else {

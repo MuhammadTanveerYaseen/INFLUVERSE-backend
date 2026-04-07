@@ -42,12 +42,14 @@ const orderSchema = new mongoose_1.Schema({
     brand: {
         type: mongoose_1.default.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+        index: true
     },
     creator: {
         type: mongoose_1.default.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+        index: true
     },
     price: { type: Number, required: true },
     platformFee: { type: Number, required: true },

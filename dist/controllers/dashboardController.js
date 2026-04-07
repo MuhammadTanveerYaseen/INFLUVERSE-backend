@@ -29,8 +29,7 @@ const getActionsCount = (req, res) => __awaiter(void 0, void 0, void 0, function
                     brand: userObjectId,
                     $or: [
                         { status: 'pending', sender: { $ne: userObjectId } },
-                        { status: 'countered', sender: userObjectId },
-                        { status: 'accepted', paid: false }
+                        { status: 'countered', sender: userObjectId }
                     ]
                 }),
                 Order_1.default.countDocuments({
@@ -45,8 +44,7 @@ const getActionsCount = (req, res) => __awaiter(void 0, void 0, void 0, function
                     creator: userObjectId,
                     $or: [
                         { status: 'pending', sender: { $ne: userObjectId } },
-                        { status: 'countered', sender: userObjectId },
-                        { status: 'accepted', paid: false }
+                        { status: 'countered', sender: userObjectId }
                     ]
                 }),
                 Order_1.default.countDocuments({

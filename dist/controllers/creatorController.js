@@ -50,16 +50,11 @@ const User_1 = __importDefault(require("../models/User"));
 const CreatorProfile_1 = __importDefault(require("../models/CreatorProfile"));
 const Order_1 = __importDefault(require("../models/Order"));
 const Offer_1 = __importDefault(require("../models/Offer"));
-const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const emailService_1 = require("../utils/emailService");
 const mongoose_1 = __importDefault(require("mongoose"));
 const redis_1 = __importDefault(require("../config/redis"));
-const generateToken = (id, role, username, email, status, isVerified, name, rejectionReason) => {
-    return jsonwebtoken_1.default.sign({ id, role, username, email, status, isVerified, name, rejectionReason }, process.env.JWT_SECRET || 'secret', {
-        expiresIn: '30d',
-    });
-};
+const authController_1 = require("./authController");
 // @desc    Register a new Creator
 // @route   POST /api/creators/register
 // @access  Public
@@ -124,6 +119,7 @@ const getCreatorProfile = (req, res) => __awaiter(void 0, void 0, void 0, functi
             role: user.role,
             status: user.status,
             isVerified: user.isVerified,
+            profileImage: (profile === null || profile === void 0 ? void 0 : profile.profileImage) || '',
             profileData: profile
         });
     }
@@ -166,7 +162,8 @@ const updateCreatorProfile = (req, res) => __awaiter(void 0, void 0, void 0, fun
             email: updatedUser.email,
             role: updatedUser.role,
             status: updatedUser.status, // Return current status
-            token: generateToken(updatedUser.id, updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason),
+            profileImage: (updatedProfile === null || updatedProfile === void 0 ? void 0 : updatedProfile.profileImage) || '',
+            token: (0, authController_1.generateToken)(updatedUser.id, updatedUser.role, updatedUser.username, updatedUser.email, updatedUser.status, updatedUser.isVerified, updatedUser.name, updatedUser.rejectionReason, updatedProfile === null || updatedProfile === void 0 ? void 0 : updatedProfile.profileImage),
             profileData: updatedProfile
         });
     }
