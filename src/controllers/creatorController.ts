@@ -17,26 +17,66 @@ import { generateToken } from './authController';
 // @access  Public
 export const registerCreator = async (req: Request, res: Response) => {
     const { username, email, password } = req.body;
-
-    const userExists = await User.findOne({ email });
-
-    if (userExists) {
-        res.status(400);
-        throw new Error('User already exists');
-    }
+    const normalizedEmail = email.toLowerCase().trim();
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const adminPanelUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/admin/users`;
 
-    // The user schema triggers a pre hook for bcrypt hashing so we don't strictly need it, but we can do it explicitly.
+    // Check if user with this email already exists
+    const existingByEmail = await User.findOne({ email: normalizedEmail });
+
+    if (existingByEmail) {
+        // If the user is already verified → genuine "already exists" error
+        if (existingByEmail.isVerified) {
+            return res.status(400).json({ message: 'An account with this email already exists. Please login.' });
+        }
+
+        // User exists but never verified OTP → refresh OTP so they can try again
+        existingByEmail.otp = otp;
+        existingByEmail.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+        existingByEmail.password = password; // update password in case they changed it
+        existingByEmail.verificationToken = crypto.randomBytes(20).toString('hex');
+        existingByEmail.verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await existingByEmail.save();
+
+        await sendEmail(
+            existingByEmail.email,
+            'Verify your Influverse Account',
+            emailTemplates.otpVerification(otp)
+        );
+
+        return res.status(200).json({
+            _id: existingByEmail.id,
+            username: existingByEmail.username,
+            email: existingByEmail.email,
+            role: existingByEmail.role,
+            isVerified: existingByEmail.isVerified,
+            requiresVerification: true,
+            message: "A new verification code has been sent to your email"
+        });
+    }
+
+    // Check if username is already taken by a verified user
+    const existingByUsername = await User.findOne({ username: username.toLowerCase().trim() });
+    if (existingByUsername && existingByUsername.isVerified) {
+        return res.status(400).json({ message: 'This username is already taken. Please choose another.' });
+    }
+
+    // If username is taken by an unverified user, delete that stale record first
+    if (existingByUsername && !existingByUsername.isVerified) {
+        await CreatorProfile.findOneAndDelete({ user: existingByUsername._id });
+        await User.findByIdAndDelete(existingByUsername._id);
+    }
+
     const user = await User.create({
         name: username,
         username,
-        email,
-        password, // Handled by pre('save') hook in Mongoose model if present.
+        email: normalizedEmail,
+        password,
         role: 'creator',
         status: 'pending',
         otp,
-        otpExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        otpExpires: new Date(Date.now() + 10 * 60 * 1000),
         verificationToken: crypto.randomBytes(20).toString('hex'),
         verificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
         isVerified: false,
@@ -49,12 +89,22 @@ export const registerCreator = async (req: Request, res: Response) => {
             verified: false,
         });
 
-        // Send OTP Email
-        await sendEmail(
+        // Send OTP to user (fire-and-forget)
+        sendEmail(
             user.email,
             'Verify your Influverse Account',
             emailTemplates.otpVerification(otp)
-        );
+        ).catch(err => console.error('[CreatorReg] OTP email failed:', err));
+
+        // Notify admin (fire-and-forget)
+        const adminEmail = process.env.ADMIN_EMAIL;
+        if (adminEmail) {
+            sendEmail(
+                adminEmail,
+                `[Admin] New Creator joined — ${user.username}`,
+                emailTemplates.adminNewUserSignup(user.username, user.email, 'creator', adminPanelUrl)
+            ).catch(err => console.error('[CreatorReg] Admin email failed:', err));
+        }
 
         res.status(200).json({
             _id: user.id,

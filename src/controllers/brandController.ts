@@ -17,28 +17,68 @@ import { generateToken } from './authController';
 // @access  Public
 export const registerBrand = async (req: Request, res: Response) => {
     let { username, email, password, companyName } = req.body;
+    const normalizedEmail = email.toLowerCase().trim();
 
     if (!username && companyName) {
         username = companyName.toLowerCase().replace(/[^a-z0-9]/g, '') + Math.floor(Math.random() * 1000);
     }
 
-    const userExists = await User.findOne({ email });
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const adminPanelUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/admin/users`;
 
-    if (userExists) {
-        res.status(400);
-        throw new Error('User already exists');
+    // Check if a user with this email already exists
+    const existingByEmail = await User.findOne({ email: normalizedEmail });
+
+    if (existingByEmail) {
+        // If already verified → genuine duplicate
+        if (existingByEmail.isVerified) {
+            return res.status(400).json({ message: 'An account with this email already exists. Please login.' });
+        }
+
+        // Unverified → refresh OTP and resend
+        existingByEmail.otp = otp;
+        existingByEmail.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+        existingByEmail.password = password;
+        existingByEmail.verificationToken = crypto.randomBytes(20).toString('hex');
+        existingByEmail.verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await existingByEmail.save();
+
+        await sendEmail(
+            existingByEmail.email,
+            'Verify your Influverse Account',
+            emailTemplates.otpVerification(otp)
+        );
+
+        return res.status(200).json({
+            _id: existingByEmail._id,
+            username: existingByEmail.username,
+            email: existingByEmail.email,
+            role: existingByEmail.role,
+            requiresVerification: true,
+            message: "A new verification code has been sent to your email"
+        });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Check if username is taken by a verified user
+    const existingByUsername = await User.findOne({ username: username.toLowerCase().trim() });
+    if (existingByUsername && existingByUsername.isVerified) {
+        return res.status(400).json({ message: 'This username is already taken. Please choose another.' });
+    }
+
+    // Clean up stale unverified account with same username
+    if (existingByUsername && !existingByUsername.isVerified) {
+        await BrandProfile.findOneAndDelete({ user: existingByUsername._id });
+        await User.findByIdAndDelete(existingByUsername._id);
+    }
 
     const user = await User.create({
         name: username,
         username,
-        email,
+        email: normalizedEmail,
         password,
         role: 'brand',
         otp,
-        otpExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        otpExpires: new Date(Date.now() + 10 * 60 * 1000),
         verificationToken: crypto.randomBytes(20).toString('hex'),
         verificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
         status: 'active',
@@ -52,12 +92,22 @@ export const registerBrand = async (req: Request, res: Response) => {
             companyName: companyName || username,
         });
 
-        // Send Verification Email with OTP
-        await sendEmail(
+        // Send OTP to user (fire-and-forget)
+        sendEmail(
             user.email,
             'Verify your Influverse Account',
             emailTemplates.otpVerification(otp)
-        );
+        ).catch(err => console.error('[BrandReg] OTP email failed:', err));
+
+        // Notify admin (fire-and-forget)
+        const adminEmail = process.env.ADMIN_EMAIL;
+        if (adminEmail) {
+            sendEmail(
+                adminEmail,
+                `[Admin] New Brand joined — ${user.username}`,
+                emailTemplates.adminNewUserSignup(user.username, user.email, 'brand', adminPanelUrl)
+            ).catch(err => console.error('[BrandReg] Admin email failed:', err));
+        }
 
         res.status(200).json({
             _id: user._id,

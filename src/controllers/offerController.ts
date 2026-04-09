@@ -4,6 +4,7 @@ import { OfferService } from '../services/offer.service';
 import { ChatService } from '../services/chat.service';
 import { OrderService } from '../services/order.service';
 import { NotificationService } from '../services/notification.service';
+import { sendEmail, emailTemplates } from '../utils/emailService';
 import mongoose from 'mongoose';
 
 export const createOffer = async (req: Request | any, res: Response) => {
@@ -93,6 +94,17 @@ export const createOffer = async (req: Request | any, res: Response) => {
             Number(price),
             targetDashboardUrl
         ).catch(err => console.error(err));
+
+        // Notify admin about the new offer (fire-and-forget)
+        const adminEmail = process.env.ADMIN_EMAIL;
+        if (adminEmail) {
+            const adminPanelUrl = `${frontendUrl}/dashboard/admin`;
+            sendEmail(
+                adminEmail,
+                `[Admin] New Offer — ${senderUser.username} → ${targetUser.username} (€${price})`,
+                emailTemplates.adminNewOffer(senderUser.username, targetUser.username, Number(price), adminPanelUrl)
+            ).catch(err => console.error('[OfferCtrl] Admin email failed:', err));
+        }
 
         res.status(201).json(offer);
     } catch (error: any) {

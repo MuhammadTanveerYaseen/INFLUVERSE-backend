@@ -268,5 +268,51 @@ export const sendEmail = async (
             : `<p>Hello,</p><p><strong>${brandName}</strong> has modified the offer.</p><p style="font-size:22px;font-weight:700;color:#1a1a2e;">New Price: €${newPrice}</p><p>Please review the updated offer and respond.</p>`;
         const cta = lang === 'de' ? 'Angebot ansehen' : 'Review Offer';
         return { subject, html: wrapEmail(title, content, cta, link) };
+    },
+
+    adminNewUserSignup: (username: string, email: string, role: 'creator' | 'brand', adminPanelUrl: string) => {
+        const roleLabel = role === 'creator' ? 'Creator' : 'Brand';
+        const subject = `[Admin] New ${roleLabel} joined Influverse — ${username}`;
+        const title = `New ${roleLabel} Signed Up`;
+        const content = `
+            <p>A new <strong>${roleLabel}</strong> account has just been created on Influverse.</p>
+            <table style="width:100%;border-collapse:collapse;margin:20px 0;text-align:left;">
+                <tr style="background:#F5F5FA;">
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;border-radius:8px 0 0 0;">Username</td>
+                    <td style="padding:10px 16px;color:#5a5a7a;border-radius:0 8px 0 0;">${username}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;">Email</td>
+                    <td style="padding:10px 16px;color:#5a5a7a;">${email}</td>
+                </tr>
+                <tr style="background:#F5F5FA;">
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;border-radius:0 0 0 8px;">Role</td>
+                    <td style="padding:10px 16px;color:#5a5a7a;border-radius:0 0 8px 0;">${roleLabel}</td>
+                </tr>
+            </table>
+            <p style="font-size:13px;color:#9090aa;">This account is pending OTP verification. You can review it in the admin panel.</p>`;
+        return { subject, html: wrapEmail(title, content, 'Open Admin Panel', adminPanelUrl) };
+    },
+
+    adminNewOffer: (senderUsername: string, targetUsername: string, price: number, adminPanelUrl: string) => {
+        const subject = `[Admin] New Offer — ${senderUsername} → ${targetUsername} (€${price})`;
+        const title = 'New Offer Created';
+        const content = `
+            <p>A new offer has been submitted on the platform.</p>
+            <table style="width:100%;border-collapse:collapse;margin:20px 0;text-align:left;">
+                <tr style="background:#F5F5FA;">
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;border-radius:8px 0 0 0;">From</td>
+                    <td style="padding:10px 16px;color:#5a5a7a;border-radius:0 8px 0 0;">${senderUsername}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;">To</td>
+                    <td style="padding:10px 16px;color:#5a5a7a;">${targetUsername}</td>
+                </tr>
+                <tr style="background:#F5F5FA;">
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;border-radius:0 0 0 8px;">Offer Value</td>
+                    <td style="padding:10px 16px;font-weight:700;font-size:18px;color:#2563eb;border-radius:0 0 8px 0;">€${price}</td>
+                </tr>
+            </table>`;
+        return { subject, html: wrapEmail(title, content, 'Open Admin Panel', adminPanelUrl) };
     }
 };
