@@ -6,7 +6,7 @@ import Offer from '../models/Offer';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { sendEmail, emailTemplates } from '../utils/emailService';
+import { sendEmail, emailTemplates, notifyAdmins } from '../utils/emailService';
 import mongoose from 'mongoose';
 import redisClient from '../config/redis';
 
@@ -96,15 +96,10 @@ export const registerCreator = async (req: Request, res: Response) => {
             emailTemplates.otpVerification(otp)
         ).catch(err => console.error('[CreatorReg] OTP email failed:', err));
 
-        // Notify admin (fire-and-forget)
-        const adminEmail = process.env.ADMIN_EMAIL;
-        if (adminEmail) {
-            sendEmail(
-                adminEmail,
-                `[Admin] New Creator joined — ${user.username}`,
-                emailTemplates.adminNewUserSignup(user.username, user.email, 'creator', adminPanelUrl)
-            ).catch(err => console.error('[CreatorReg] Admin email failed:', err));
-        }
+        // Notify all admins (fire-and-forget)
+        notifyAdmins(
+            emailTemplates.adminNewUserSignup(user.username, user.email, 'creator', adminPanelUrl)
+        ).catch(err => console.error('[CreatorReg] Admin notify failed:', err));
 
         res.status(200).json({
             _id: user.id,

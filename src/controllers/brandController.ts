@@ -7,7 +7,7 @@ import CreatorProfile from '../models/CreatorProfile';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { sendEmail, emailTemplates } from '../utils/emailService';
+import { sendEmail, emailTemplates, notifyAdmins } from '../utils/emailService';
 import mongoose from 'mongoose';
 
 import { generateToken } from './authController';
@@ -99,15 +99,10 @@ export const registerBrand = async (req: Request, res: Response) => {
             emailTemplates.otpVerification(otp)
         ).catch(err => console.error('[BrandReg] OTP email failed:', err));
 
-        // Notify admin (fire-and-forget)
-        const adminEmail = process.env.ADMIN_EMAIL;
-        if (adminEmail) {
-            sendEmail(
-                adminEmail,
-                `[Admin] New Brand joined — ${user.username}`,
-                emailTemplates.adminNewUserSignup(user.username, user.email, 'brand', adminPanelUrl)
-            ).catch(err => console.error('[BrandReg] Admin email failed:', err));
-        }
+        // Notify all admins (fire-and-forget)
+        notifyAdmins(
+            emailTemplates.adminNewUserSignup(user.username, user.email, 'brand', adminPanelUrl)
+        ).catch(err => console.error('[BrandReg] Admin notify failed:', err));
 
         res.status(200).json({
             _id: user._id,

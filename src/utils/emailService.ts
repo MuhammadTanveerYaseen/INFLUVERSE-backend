@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import mongoose from 'mongoose';
 
 type Lang = 'en' | 'de';
 
@@ -105,7 +106,51 @@ export const sendEmail = async (
         console.error(`[EmailService] CRITICAL Error sending email: ${error}`);
         throw error; // Rethrow so caller knows it failed
     }
-};export const emailTemplates = {
+};
+
+export const notifyAdmins = async (template: { subject: string, html: string }) => {
+    try {
+        console.log('[EmailService] Notifying admins...');
+        
+        // Use mongoose.model to avoid direct circular dependency with User model
+        const User = mongoose.model('User');
+        const admins = await User.find({ role: 'admin' }).select('email');
+        
+        const adminEmails = admins.map(admin => admin.email);
+        
+        // Also include ADMIN_EMAIL from env if set and not already in the list
+        const envAdmin = process.env.ADMIN_EMAIL;
+        if (envAdmin && !adminEmails.includes(envAdmin)) {
+            adminEmails.push(envAdmin);
+        }
+
+        if (adminEmails.length === 0) {
+            console.warn('[EmailService] No admin emails found (DB or ENV). Notification skipped.');
+            return;
+        }
+
+        console.log(`[EmailService] Sending notification to ${adminEmails.length} admin(s): ${adminEmails.join(', ')}`);
+        
+        await Promise.all(adminEmails.map(email => 
+            sendEmail(email, template).catch(err => 
+                console.error(`[EmailService] Failed to notify admin ${email}:`, err)
+            )
+        ));
+    } catch (error) {
+        console.error('[EmailService] CRITICAL: notifyAdmins failed:', error);
+        
+        // Fallback to environment admin if MongoDB query failed
+        const envAdmin = process.env.ADMIN_EMAIL;
+        if (envAdmin) {
+            console.log(`[EmailService] Attempting fallback notification to ${envAdmin}`);
+            await sendEmail(envAdmin, template).catch(err => 
+                console.error(`[EmailService] Fallback notification failed:`, err)
+            );
+        }
+    }
+};
+
+export const emailTemplates = {
     otpVerification: (otp: string, lang: Lang = 'en') => {
         const subject = lang === 'de' ? 'Verifiziere dein Influverse Konto' : 'Verify your Influverse account';
         const title = lang === 'de' ? 'Konto verifizieren' : 'Verify your account';

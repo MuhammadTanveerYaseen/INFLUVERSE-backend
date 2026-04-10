@@ -37,7 +37,7 @@ export class NotificationService {
         await this.createNotification(
             recipientId,
             'New Offer Received',
-            `You received an offer of $${price} from ${brandName}.`,
+            `You received an offer of €${price} from ${brandName}.`,
             'offer',
             link,
             senderId
