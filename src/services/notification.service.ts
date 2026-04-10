@@ -1,8 +1,21 @@
 import { sendEmail, emailTemplates } from '../utils/emailService';
 import Notification from '../models/Notification';
 import { emitToUser } from './socket.service';
+import User from '../models/User';
+import mongoose from 'mongoose';
 
 export class NotificationService {
+
+    // Helper to fetch user language
+    private static async getUserLanguage(userId: string): Promise<'en' | 'de'> {
+        try {
+            const user = await User.findById(userId).select('preferredLanguage');
+            return (user as any)?.preferredLanguage || 'de';
+        } catch (error) {
+            console.error('[NotificationService] Error fetching user language:', error);
+            return 'de';
+        }
+    }
 
     // Helper to create DB notification
     private static async createNotification(
@@ -33,163 +46,216 @@ export class NotificationService {
     }
 
     static async sendOfferReceived(recipientId: string, email: string, senderId: string, brandName: string, price: number, link: string) {
+        const lang = await this.getUserLanguage(recipientId);
+
         // DB Notification
         await this.createNotification(
             recipientId,
-            'New Offer Received',
-            `You received an offer of €${price} from ${brandName}.`,
+            lang === 'de' ? 'Neues Angebot erhalten' : 'New Offer Received',
+            lang === 'de' ? `Du hast ein Angebot über €${price} von ${brandName} erhalten.` : `You received an offer of €${price} from ${brandName}.`,
             'offer',
             link,
             senderId
         );
 
         // Email
+        const template = emailTemplates.offerReceived(brandName, price, link, lang);
         sendEmail(
             email,
-            'New Offer Received on Influverse',
-            emailTemplates.offerReceived(brandName, price, link)
+            template.subject,
+            template.html
         ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendOfferStatusUpdate(recipientId: string, email: string, senderId: string, creatorName: string, status: string, link: string) {
-        const title = `Offer ${status === 'countered' ? 'Countered' : (status === 'accepted' ? 'Accepted' : 'Rejected')}`;
+        const lang = await this.getUserLanguage(recipientId);
+        
+        let dbTitle, dbMsg;
+        if (status === 'accepted') {
+            dbTitle = lang === 'de' ? 'Angebot angenommen' : 'Offer Accepted';
+            dbMsg = lang === 'de' ? `${creatorName} hat dein Angebot angenommen.` : `${creatorName} has accepted your offer.`;
+        } else if (status === 'rejected') {
+            dbTitle = lang === 'de' ? 'Angebot abgelehnt' : 'Offer Declined';
+            dbMsg = lang === 'de' ? `${creatorName} hat dein Angebot abgelehnt.` : `${creatorName} has declined your offer.`;
+        } else {
+            dbTitle = lang === 'de' ? 'Angebot aktualisiert' : 'Offer Updated';
+            dbMsg = lang === 'de' ? `${creatorName} hat ein Gegenangebot gesendet.` : `${creatorName} has countered your offer.`;
+        }
+
         // DB Notification
         await this.createNotification(
             recipientId,
-            title,
-            `${creatorName} has ${status} your offer.`,
+            dbTitle,
+            dbMsg,
             'offer',
             link,
             senderId
         );
 
         // Email
+        const template = emailTemplates.offerStatusUpdate(creatorName, status, link, lang);
         sendEmail(
             email,
-            title,
-            emailTemplates.offerStatusUpdate(creatorName, status, link)
+            template.subject,
+            template.html
         ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendOrderCreated(recipientId: string, email: string, orderId: string, role: string, link: string) {
+        const lang = await this.getUserLanguage(recipientId);
+
         // DB Notification
         await this.createNotification(
             recipientId,
-            'Order Started',
-            `Order #${orderId} has been created.`,
+            lang === 'de' ? 'Bestellung gestartet' : 'Order Started',
+            lang === 'de' ? `Bestellung #${orderId} wurde erstellt.` : `Order #${orderId} has been created.`,
             'order',
             link
         );
 
         // Email
+        const template = emailTemplates.orderCreated(orderId, role, link, lang);
         sendEmail(
             email,
-            `Order #${orderId} Started`,
-            emailTemplates.orderCreated(orderId, role, link)
+            template.subject,
+            template.html
         ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendContentDelivered(recipientId: string, email: string, senderId: string, orderId: string, link: string) {
+        const lang = await this.getUserLanguage(recipientId);
+
         // DB Notification
         await this.createNotification(
             recipientId,
-            'Content Delivered',
-            `Content for Order #${orderId} has been submitted for review.`,
+            lang === 'de' ? 'Inhalt geliefert' : 'Content Delivered',
+            lang === 'de' ? `Inhalt für Bestellung #${orderId} wurde zur Prüfung eingereicht.` : `Content for Order #${orderId} has been submitted for review.`,
             'order',
             link,
             senderId
         );
 
         // Email
+        const template = emailTemplates.contentDelivered(orderId, link, lang);
         sendEmail(
             email,
-            'Order Delivered - Review Needed',
-            emailTemplates.contentDelivered(orderId, link)
+            template.subject,
+            template.html
         ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendOrderApproved(recipientId: string, email: string, senderId: string, orderId: string, link: string) {
+        const lang = await this.getUserLanguage(recipientId);
+
         // DB Notification
         await this.createNotification(
             recipientId,
-            'Order Approved',
-            `Your submission for Order #${orderId} has been approved!`,
+            lang === 'de' ? 'Bestellung genehmigt' : 'Order Approved',
+            lang === 'de' ? `Deine Einreichung für Bestellung #${orderId} wurde genehmigt!` : `Your submission for Order #${orderId} has been approved!`,
             'order',
             link,
             senderId
         );
 
         // Email
+        const template = emailTemplates.orderApproved(orderId, link, lang);
         sendEmail(
             email,
-            'Order Approved!',
-            emailTemplates.orderApproved(orderId, link)
+            template.subject,
+            template.html
         ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendRevisionRequested(recipientId: string, email: string, senderId: string, orderId: string, reason: string, link: string) {
+        const lang = await this.getUserLanguage(recipientId);
+
         // DB Notification
         await this.createNotification(
             recipientId,
-            'Revision Requested',
-            `Revision requested for Order #${orderId}: ${reason}`,
+            lang === 'de' ? 'Überarbeitung angefordert' : 'Revision Requested',
+            lang === 'de' ? `Überarbeitung für Bestellung #${orderId} angefordert: ${reason}` : `Revision requested for Order #${orderId}: ${reason}`,
             'order',
             link,
             senderId
         );
 
         // Email
+        const template = emailTemplates.revisionRequested(orderId, reason, link, lang);
         sendEmail(
             email,
-            'Revision Requested ✏️',
-            emailTemplates.revisionRequested(orderId, reason, link)
+            template.subject,
+            template.html
         ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendOrderCancelled(recipientId: string, email: string, senderId: string | undefined, orderId: string, reason: string, link: string, isDispute: boolean = false) {
-        const title = isDispute ? 'Order Disputed' : 'Order Cancelled';
+        const lang = await this.getUserLanguage(recipientId);
+        
+        const dbTitle = isDispute 
+            ? (lang === 'de' ? 'Bestellung angefochten' : 'Order Disputed')
+            : (lang === 'de' ? 'Bestellung storniert' : 'Order Cancelled');
+
+        const dbMessage = lang === 'de'
+            ? `${dbTitle} für Bestellung #${orderId}. Grund: ${reason}`
+            : `${dbTitle} for Order #${orderId}. Reason: ${reason}`;
 
         // DB Notification
         await this.createNotification(
             recipientId,
-            title,
-            `${title} for Order #${orderId}. Reason: ${reason}`,
-            'order', // or 'system'
+            dbTitle,
+            dbMessage,
+            'order',
             link,
             senderId
         );
 
         // Email
+        const template = emailTemplates.orderCancelled(orderId, reason, link, lang);
         sendEmail(
             email,
-            `${title} ❌`,
-            emailTemplates.orderCancelled(orderId, reason, link)
+            template.subject,
+            template.html
         ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendPaymentRequired(recipientId: string, email: string, orderId: string, link: string) {
+        const lang = await this.getUserLanguage(recipientId);
+
         // DB Notification
         await this.createNotification(
             recipientId,
-            'Payment Required',
-            `Creator accepted! Please complete payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} to start the campaign.`,
+            lang === 'de' ? 'Zahlung erforderlich' : 'Payment Required',
+            lang === 'de' 
+                ? `Creator hat angenommen! Bitte schließe die Zahlung für Bestellung #${orderId.substring(orderId.length - 6).toUpperCase()} ab, um die Kampagne zu starten.`
+                : `Creator accepted! Please complete payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} to start the campaign.`,
             'payment',
             link
         );
 
         // Email
+        const subject = lang === 'de' ? 'Aktion erforderlich: Schließe deine Influverse-Zahlung ab' : 'Action Required: Complete your Influverse Payment';
+        const content = lang === 'de'
+            ? `Der Creator hat dein Angebot angenommen! Um die Kampagne offiziell zu starten und den Zeitraum zu sichern, schließe bitte die Zahlung ab unter: ${link}`
+            : `The creator has accepted your offer! To officially start the campaign and secure the timeframe, please complete the payment at: ${link}`;
+        
         sendEmail(
             email,
-            'Action Required: Complete your Influverse Payment',
-            `The creator has accepted your offer! To officially start the campaign and secure the timeframe, please complete the payment at: ${link}`
+            subject,
+            content
         ).catch(err => console.error('Failed to send email:', err));
     }
 
     static async sendPaymentConfirmed(recipientId: string, email: string, orderId: string, link: string, isBrand: boolean = false) {
-        const title = 'Payment Secured';
+        const lang = await this.getUserLanguage(recipientId);
+        const title = lang === 'de' ? 'Zahlung gesichert' : 'Payment Secured';
+        
         const message = isBrand 
-            ? `Your payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} is successful. The creator has been notified.`
-            : `Payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} has been secured in escrow. You can now start the campaign!`;
+            ? (lang === 'de' 
+                ? `Deine Zahlung für Bestellung #${orderId.substring(orderId.length - 6).toUpperCase()} war erfolgreich. Der Creator wurde benachrichtigt.`
+                : `Your payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} is successful. The creator has been notified.`)
+            : (lang === 'de'
+                ? `Zahlung für Bestellung #${orderId.substring(orderId.length - 6).toUpperCase()} wurde im Escrow gesichert. Du kannst jetzt mit der Kampagne starten!`
+                : `Payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} has been secured in escrow. You can now start the campaign!`);
 
         await this.createNotification(
             recipientId,
@@ -200,17 +266,19 @@ export class NotificationService {
         );
 
         if (isBrand) {
+            const template = emailTemplates.paymentConfirmation(orderId, link, lang);
             sendEmail(
                 email,
-                `Payment successful — Order #${orderId}`,
-                emailTemplates.paymentConfirmation(orderId, link)
+                template.subject,
+                template.html
             ).catch(err => console.error('Failed to send email:', err));
         } else {
             // For creator, payment confirmation means the order is now created/active
+            const template = emailTemplates.orderCreated(orderId, 'creator', link, lang);
             sendEmail(
                 email,
-                `Order #${orderId} created`,
-                emailTemplates.orderCreated(orderId, 'creator', link)
+                template.subject,
+                template.html
             ).catch(err => console.error('Failed to send email:', err));
         }
     }

@@ -21,6 +21,7 @@ export interface IUser extends Document {
     resetPasswordToken?: string;
     resetPasswordExpire?: Date;
     blockedUsers: mongoose.Types.ObjectId[];
+    preferredLanguage: 'en' | 'de';
 }
 
 const userSchema: Schema = new Schema({
@@ -63,6 +64,11 @@ const userSchema: Schema = new Schema({
     rejectionReason: {
         type: String,
         default: '',
+    },
+    preferredLanguage: {
+        type: String,
+        enum: ['en', 'de'],
+        default: 'de',
     },
     blockedUsers: [{
         type: Schema.Types.ObjectId,

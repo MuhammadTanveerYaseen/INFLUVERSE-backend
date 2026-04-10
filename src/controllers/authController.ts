@@ -12,9 +12,10 @@ import CreatorProfile from '../models/CreatorProfile';
 // @route   POST /api/auth/forgot-password
 // @access  Public
 export const forgotPassword = async (req: Request, res: Response) => {
-    const { email } = req.body;
+    const { email, language } = req.body;
     const normalizedEmail = email.toLowerCase().trim();
-    console.log(`[ForgotPassword] Request for: ${normalizedEmail}`);
+    const lang = (language === 'en' || language === 'de') ? language : 'de';
+    console.log(`[ForgotPassword] Request for: ${normalizedEmail} | Lang: ${lang}`);
 
     try {
         const user = await User.findOne({ email: normalizedEmail });
@@ -40,11 +41,12 @@ export const forgotPassword = async (req: Request, res: Response) => {
         const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
 
         try {
-            console.log(`[ForgotPassword] Attempting to send email to: ${user.email}`);
+            console.log(`[ForgotPassword] Attempting to send email to: ${user.email} in ${lang}`);
+            const template = emailTemplates.passwordReset(resetUrl, lang);
             sendEmail(
                 user.email,
-                'Password Reset Request',
-                emailTemplates.passwordReset(resetUrl)
+                template.subject,
+                template.html
             ).catch(err => console.error(`[ForgotPassword] Failed to send email asynchronously: ${err.message}`));
 
             res.status(200).json({ message: 'Email sent' });

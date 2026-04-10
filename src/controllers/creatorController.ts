@@ -16,8 +16,9 @@ import { generateToken } from './authController';
 // @route   POST /api/creators/register
 // @access  Public
 export const registerCreator = async (req: Request, res: Response) => {
-    const { username, email, password } = req.body;
+    const { username, email, password, language } = req.body;
     const normalizedEmail = email.toLowerCase().trim();
+    const lang = (language === 'en' || language === 'de') ? language : 'de';
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const adminPanelUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/admin/users`;
@@ -35,14 +36,16 @@ export const registerCreator = async (req: Request, res: Response) => {
         existingByEmail.otp = otp;
         existingByEmail.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
         existingByEmail.password = password; // update password in case they changed it
+        existingByEmail.preferredLanguage = lang;
         existingByEmail.verificationToken = crypto.randomBytes(20).toString('hex');
         existingByEmail.verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
         await existingByEmail.save();
 
+        const template = emailTemplates.otpVerification(otp, lang);
         await sendEmail(
             existingByEmail.email,
-            'Verify your Influverse Account',
-            emailTemplates.otpVerification(otp)
+            template.subject,
+            template.html
         );
 
         return res.status(200).json({
@@ -75,6 +78,7 @@ export const registerCreator = async (req: Request, res: Response) => {
         password,
         role: 'creator',
         status: 'pending',
+        preferredLanguage: lang,
         otp,
         otpExpires: new Date(Date.now() + 10 * 60 * 1000),
         verificationToken: crypto.randomBytes(20).toString('hex'),
@@ -90,10 +94,11 @@ export const registerCreator = async (req: Request, res: Response) => {
         });
 
         // Send OTP to user (fire-and-forget)
+        const template = emailTemplates.otpVerification(otp, lang);
         sendEmail(
             user.email,
-            'Verify your Influverse Account',
-            emailTemplates.otpVerification(otp)
+            template.subject,
+            template.html
         ).catch(err => console.error('[CreatorReg] OTP email failed:', err));
 
         // Notify all admins (fire-and-forget)

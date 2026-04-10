@@ -162,10 +162,11 @@ export const sendMessage = async (req: Request | any, res: Response) => {
                         const { sendEmail, emailTemplates } = require('../utils/emailService');
                         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
                         const link = `${frontendUrl}/dashboard/${recipientUser.role}/messages/${chatId}`;
+                        const template = emailTemplates.newMessage(senderUser.username, link, recipientUser.preferredLanguage || 'de');
                         await sendEmail(
                             recipientUser.email,
-                            `New message from ${senderUser.username}`,
-                            emailTemplates.newMessage(senderUser.username, link, 'en')
+                            template.subject,
+                            template.html
                         );
                     }
                 } catch (err) {

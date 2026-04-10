@@ -95,7 +95,7 @@ export const sendEmail = async (
 
         console.log(`[EmailService] Sending email to: ${to} | Subject: ${subject}`);
         const mailOptions = {
-            from: `"Influverse Team" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+            from: `"Influverse" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
             to,
             subject,
             html,

@@ -64,10 +64,11 @@ export const resendVerification = async (req: AuthRequest, res: Response) => {
 
         // Send email
         const verificationLink = `${process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
+        const template = emailTemplates.verificationEmail(verificationLink, user.preferredLanguage || 'de');
         await sendEmail(
             user.email,
-            'Verify Your Email Address',
-            emailTemplates.verificationEmail(verificationLink)
+            template.subject,
+            template.html
         );
 
         res.json({ message: "Verification email sent successfully" });
