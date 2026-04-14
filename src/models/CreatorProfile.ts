@@ -47,6 +47,11 @@ export interface ICreatorProfile extends Document {
     availability: string; // Changed from boolean available
     phoneNumber?: string;
     stripeConnectId?: string; // For payouts
+    stripeOnboardingStatus?: {
+        detailsSubmitted: boolean;
+        payoutsEnabled: boolean;
+        chargesEnabled: boolean;
+    };
     bankDetails?: {
         bankName: string;
         accountHolderName: string;
@@ -114,6 +119,11 @@ const creatorProfileSchema: Schema = new Schema({
     },
     phoneNumber: { type: String },
     stripeConnectId: { type: String },
+    stripeOnboardingStatus: {
+        detailsSubmitted: { type: Boolean, default: false },
+        payoutsEnabled: { type: Boolean, default: false },
+        chargesEnabled: { type: Boolean, default: false },
+    },
     bankDetails: {
         bankName: { type: String },
         accountHolderName: { type: String },

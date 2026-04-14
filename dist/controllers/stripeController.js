@@ -34,11 +34,20 @@ exports.StripeController = {
             }
             const account = yield stripe.accounts.create({
                 type: 'express',
-                country: profile.country || 'US',
+                country: profile.country || 'DE',
                 email: req.user.email,
                 capabilities: {
                     card_payments: { requested: true },
                     transfers: { requested: true },
+                },
+                business_profile: {
+                    name: 'Influverse Creator',
+                    url: process.env.FRONTEND_URL || 'https://influverse.ch',
+                },
+                settings: {
+                    payments: {
+                        statement_descriptor: 'INFLUVERSE',
+                    },
                 },
             });
             profile.stripeConnectId = account.id;
@@ -74,6 +83,30 @@ exports.StripeController = {
             res.status(500).json({ message: error.message });
         }
     }),
+    // 3. Sync Account Status
+    syncAccountStatus: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const userId = req.user._id || req.user.id;
+            const profile = yield CreatorProfile_1.default.findOne({ user: userId });
+            if (!profile || !profile.stripeConnectId) {
+                return res.status(400).json({ message: 'No Stripe account found' });
+            }
+            const account = yield stripe.accounts.retrieve(profile.stripeConnectId);
+            profile.stripeOnboardingStatus = {
+                detailsSubmitted: account.details_submitted,
+                payoutsEnabled: account.payouts_enabled,
+                chargesEnabled: account.charges_enabled
+            };
+            yield profile.save();
+            res.status(200).json({
+                status: profile.stripeOnboardingStatus
+            });
+        }
+        catch (error) {
+            console.error('[Stripe] Sync Status Error:', error);
+            res.status(500).json({ message: error.message });
+        }
+    }),
     // Webhook implementation handling events
     webhook: (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         var _a;
@@ -92,10 +125,13 @@ exports.StripeController = {
                     const account = event.data.object;
                     const profile = yield CreatorProfile_1.default.findOne({ stripeConnectId: account.id });
                     if (profile) {
-                        const isEnabled = account.charges_enabled && account.payouts_enabled;
-                        profile.payoutsEnabled = isEnabled;
+                        profile.stripeOnboardingStatus = {
+                            detailsSubmitted: account.details_submitted,
+                            payoutsEnabled: account.payouts_enabled,
+                            chargesEnabled: account.charges_enabled,
+                        };
                         yield profile.save();
-                        console.log(`[Stripe Webhook] Updated account ${account.id} payoutsEnabled: ${isEnabled}`);
+                        console.log(`[Stripe Webhook] Synced account ${account.id} status: payouts=${account.payouts_enabled}, charges=${account.charges_enabled}`);
                     }
                     break;
                 }

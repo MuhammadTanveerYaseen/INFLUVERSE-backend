@@ -189,7 +189,8 @@ const sendMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
                         const { sendEmail, emailTemplates } = require('../utils/emailService');
                         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
                         const link = `${frontendUrl}/dashboard/${recipientUser.role}/messages/${chatId}`;
-                        yield sendEmail(recipientUser.email, `New message from ${senderUser.username}`, emailTemplates.newMessage(senderUser.username, link, 'en'));
+                        const template = emailTemplates.newMessage(senderUser.username, link, recipientUser.preferredLanguage || 'de');
+                        yield sendEmail(recipientUser.email, template.subject, template.html);
                     }
                 }
                 catch (err) {

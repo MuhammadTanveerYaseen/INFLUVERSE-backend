@@ -22,7 +22,7 @@ export const PaymentController = {
                 return res.status(403).json({ message: 'Only creators can onboard for payouts' });
             }
 
-            const url = await PaymentService.createConnectAccountLink(user);
+            const url = await PaymentService.createConnectAccountLink(user, req.headers.origin);
             res.json({ url });
         } catch (error: any) {
             console.error('Onboard error:', error);
@@ -38,10 +38,17 @@ export const PaymentController = {
 
             const profile = await CreatorProfile.findOne({ user: userId });
             const stripeId = profile?.stripeConnectId;
-            let stripeStatus = { details_submitted: false, payouts_enabled: false };
+            let stripeStatus = { details_submitted: false, payouts_enabled: false, charges_enabled: false };
 
             if (stripeId) {
                 stripeStatus = await PaymentService.getAccountStatus(stripeId);
+                // Store and refresh status in DB as per requirement
+                profile.stripeOnboardingStatus = {
+                    detailsSubmitted: stripeStatus.details_submitted,
+                    payoutsEnabled: stripeStatus.payouts_enabled,
+                    chargesEnabled: stripeStatus.charges_enabled
+                };
+                await profile.save();
             }
 
             const transactions = await Transaction.find({ user: userId }).sort({ createdAt: -1 });

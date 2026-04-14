@@ -64,7 +64,8 @@ const resendVerification = (req, res) => __awaiter(void 0, void 0, void 0, funct
         yield user.save();
         // Send email
         const verificationLink = `${process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
-        yield (0, emailService_1.sendEmail)(user.email, 'Verify Your Email Address', emailService_1.emailTemplates.verificationEmail(verificationLink));
+        const template = emailService_1.emailTemplates.verificationEmail(verificationLink, user.preferredLanguage || 'de');
+        yield (0, emailService_1.sendEmail)(user.email, template.subject, template.html);
         res.json({ message: "Verification email sent successfully" });
     }
     catch (error) {

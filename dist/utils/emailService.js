@@ -12,8 +12,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.emailTemplates = exports.sendEmail = void 0;
+exports.emailTemplates = exports.notifyAdmins = exports.sendEmail = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
+const mongoose_1 = __importDefault(require("mongoose"));
 const wrapEmail = (title, content, ctaLabel, ctaHref) => `
 <!DOCTYPE html>
 <html lang="en">
@@ -112,6 +113,36 @@ const sendEmail = (to, subjectOrTemplate, htmlStr) => __awaiter(void 0, void 0, 
     }
 });
 exports.sendEmail = sendEmail;
+const notifyAdmins = (template) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        console.log('[EmailService] Notifying admins...');
+        // Use mongoose.model to avoid direct circular dependency with User model
+        const User = mongoose_1.default.model('User');
+        const admins = yield User.find({ role: 'admin' }).select('email');
+        const adminEmails = admins.map(admin => admin.email);
+        // Also include ADMIN_EMAIL from env if set and not already in the list
+        const envAdmin = process.env.ADMIN_EMAIL;
+        if (envAdmin && !adminEmails.includes(envAdmin)) {
+            adminEmails.push(envAdmin);
+        }
+        if (adminEmails.length === 0) {
+            console.warn('[EmailService] No admin emails found (DB or ENV). Notification skipped.');
+            return;
+        }
+        console.log(`[EmailService] Sending notification to ${adminEmails.length} admin(s): ${adminEmails.join(', ')}`);
+        yield Promise.all(adminEmails.map(email => (0, exports.sendEmail)(email, template).catch(err => console.error(`[EmailService] Failed to notify admin ${email}:`, err))));
+    }
+    catch (error) {
+        console.error('[EmailService] CRITICAL: notifyAdmins failed:', error);
+        // Fallback to environment admin if MongoDB query failed
+        const envAdmin = process.env.ADMIN_EMAIL;
+        if (envAdmin) {
+            console.log(`[EmailService] Attempting fallback notification to ${envAdmin}`);
+            yield (0, exports.sendEmail)(envAdmin, template).catch(err => console.error(`[EmailService] Fallback notification failed:`, err));
+        }
+    }
+});
+exports.notifyAdmins = notifyAdmins;
 exports.emailTemplates = {
     otpVerification: (otp, lang = 'en') => {
         const subject = lang === 'de' ? 'Verifiziere dein Influverse Konto' : 'Verify your Influverse account';
@@ -262,5 +293,49 @@ exports.emailTemplates = {
             : `<p>Hello,</p><p><strong>${brandName}</strong> has modified the offer.</p><p style="font-size:22px;font-weight:700;color:#1a1a2e;">New Price: €${newPrice}</p><p>Please review the updated offer and respond.</p>`;
         const cta = lang === 'de' ? 'Angebot ansehen' : 'Review Offer';
         return { subject, html: wrapEmail(title, content, cta, link) };
+    },
+    adminNewUserSignup: (username, email, role, adminPanelUrl) => {
+        const roleLabel = role === 'creator' ? 'Creator' : 'Brand';
+        const subject = `[Admin] New ${roleLabel} joined Influverse — ${username}`;
+        const title = `New ${roleLabel} Signed Up`;
+        const content = `
+            <p>A new <strong>${roleLabel}</strong> account has just been created on Influverse.</p>
+            <table style="width:100%;border-collapse:collapse;margin:20px 0;text-align:left;">
+                <tr style="background:#F5F5FA;">
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;border-radius:8px 0 0 0;">Username</td>
+                    <td style="padding:10px 16px;color:#5a5a7a;border-radius:0 8px 0 0;">${username}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;">Email</td>
+                    <td style="padding:10px 16px;color:#5a5a7a;">${email}</td>
+                </tr>
+                <tr style="background:#F5F5FA;">
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;border-radius:0 0 0 8px;">Role</td>
+                    <td style="padding:10px 16px;color:#5a5a7a;border-radius:0 0 8px 0;">${roleLabel}</td>
+                </tr>
+            </table>
+            <p style="font-size:13px;color:#9090aa;">This account is pending OTP verification. You can review it in the admin panel.</p>`;
+        return { subject, html: wrapEmail(title, content, 'Open Admin Panel', adminPanelUrl) };
+    },
+    adminNewOffer: (senderUsername, targetUsername, price, adminPanelUrl) => {
+        const subject = `[Admin] New Offer — ${senderUsername} → ${targetUsername} (€${price})`;
+        const title = 'New Offer Created';
+        const content = `
+            <p>A new offer has been submitted on the platform.</p>
+            <table style="width:100%;border-collapse:collapse;margin:20px 0;text-align:left;">
+                <tr style="background:#F5F5FA;">
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;border-radius:8px 0 0 0;">From</td>
+                    <td style="padding:10px 16px;color:#5a5a7a;border-radius:0 8px 0 0;">${senderUsername}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;">To</td>
+                    <td style="padding:10px 16px;color:#5a5a7a;">${targetUsername}</td>
+                </tr>
+                <tr style="background:#F5F5FA;">
+                    <td style="padding:10px 16px;font-weight:600;color:#1a1a2e;border-radius:0 0 0 8px;">Offer Value</td>
+                    <td style="padding:10px 16px;font-weight:700;font-size:18px;color:#2563eb;border-radius:0 0 8px 0;">€${price}</td>
+                </tr>
+            </table>`;
+        return { subject, html: wrapEmail(title, content, 'Open Admin Panel', adminPanelUrl) };
     }
 };

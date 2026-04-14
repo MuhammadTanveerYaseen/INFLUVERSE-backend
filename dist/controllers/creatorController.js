@@ -59,23 +59,58 @@ const authController_1 = require("./authController");
 // @route   POST /api/creators/register
 // @access  Public
 const registerCreator = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { username, email, password } = req.body;
-    const userExists = yield User_1.default.findOne({ email });
-    if (userExists) {
-        res.status(400);
-        throw new Error('User already exists');
-    }
+    const { username, email, password, language } = req.body;
+    const normalizedEmail = email.toLowerCase().trim();
+    const lang = (language === 'en' || language === 'de') ? language : 'de';
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    // The user schema triggers a pre hook for bcrypt hashing so we don't strictly need it, but we can do it explicitly.
+    const adminPanelUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/admin/users`;
+    // Check if user with this email already exists
+    const existingByEmail = yield User_1.default.findOne({ email: normalizedEmail });
+    if (existingByEmail) {
+        // If the user is already verified → genuine "already exists" error
+        if (existingByEmail.isVerified) {
+            return res.status(400).json({ message: 'An account with this email already exists. Please login.' });
+        }
+        // User exists but never verified OTP → refresh OTP so they can try again
+        existingByEmail.otp = otp;
+        existingByEmail.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+        existingByEmail.password = password; // update password in case they changed it
+        existingByEmail.preferredLanguage = lang;
+        existingByEmail.verificationToken = crypto_1.default.randomBytes(20).toString('hex');
+        existingByEmail.verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        yield existingByEmail.save();
+        const template = emailService_1.emailTemplates.otpVerification(otp, lang);
+        yield (0, emailService_1.sendEmail)(existingByEmail.email, template.subject, template.html);
+        return res.status(200).json({
+            _id: existingByEmail.id,
+            username: existingByEmail.username,
+            email: existingByEmail.email,
+            role: existingByEmail.role,
+            isVerified: existingByEmail.isVerified,
+            requiresVerification: true,
+            message: "A new verification code has been sent to your email"
+        });
+    }
+    // Check if username is already taken by a verified user
+    const existingByUsername = yield User_1.default.findOne({ username: username.toLowerCase().trim() });
+    if (existingByUsername && existingByUsername.isVerified) {
+        return res.status(400).json({ message: 'This username is already taken. Please choose another.' });
+    }
+    // If username is taken by an unverified user, delete that stale record first
+    if (existingByUsername && !existingByUsername.isVerified) {
+        yield CreatorProfile_1.default.findOneAndDelete({ user: existingByUsername._id });
+        yield User_1.default.findByIdAndDelete(existingByUsername._id);
+    }
     const user = yield User_1.default.create({
         name: username,
         username,
-        email,
-        password, // Handled by pre('save') hook in Mongoose model if present.
+        email: normalizedEmail,
+        password,
         role: 'creator',
         status: 'pending',
+        preferredLanguage: lang,
         otp,
-        otpExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        otpExpires: new Date(Date.now() + 10 * 60 * 1000),
         verificationToken: crypto_1.default.randomBytes(20).toString('hex'),
         verificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
         isVerified: false,
@@ -86,8 +121,11 @@ const registerCreator = (req, res) => __awaiter(void 0, void 0, void 0, function
             stats: { completedOrders: 0, engagementRate: 0, followerCount: 0, rating: 0, reviewCount: 0 },
             verified: false,
         });
-        // Send OTP Email
-        yield (0, emailService_1.sendEmail)(user.email, 'Verify your Influverse Account', emailService_1.emailTemplates.otpVerification(otp));
+        // Send OTP to user (fire-and-forget)
+        const template = emailService_1.emailTemplates.otpVerification(otp, lang);
+        (0, emailService_1.sendEmail)(user.email, template.subject, template.html).catch(err => console.error('[CreatorReg] OTP email failed:', err));
+        // Notify all admins (fire-and-forget)
+        (0, emailService_1.notifyAdmins)(emailService_1.emailTemplates.adminNewUserSignup(user.username, user.email, 'creator', adminPanelUrl)).catch(err => console.error('[CreatorReg] Admin notify failed:', err));
         res.status(200).json({
             _id: user.id,
             username: user.username,

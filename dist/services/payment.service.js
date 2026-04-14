@@ -30,11 +30,20 @@ class PaymentService {
                     try {
                         const account = yield stripe.accounts.create({
                             type: 'express',
-                            country: 'US',
+                            country: 'DE',
                             email: user.email,
                             capabilities: {
                                 card_payments: { requested: true },
                                 transfers: { requested: true },
+                            },
+                            business_profile: {
+                                name: 'Influverse Creator',
+                                url: process.env.FRONTEND_URL || 'https://influverse.ch',
+                            },
+                            settings: {
+                                payments: {
+                                    statement_descriptor: 'INFLUVERSE',
+                                },
                             },
                         });
                         accountId = account.id;
@@ -76,11 +85,20 @@ class PaymentService {
                 const creatorUser = yield require('../models/User').default.findById(creatorId);
                 const account = yield stripe.accounts.create({
                     type: 'express',
-                    country: profile.country || 'US',
+                    country: profile.country || 'DE',
                     email: (creatorUser === null || creatorUser === void 0 ? void 0 : creatorUser.email) || '',
                     capabilities: {
                         card_payments: { requested: true },
                         transfers: { requested: true },
+                    },
+                    business_profile: {
+                        name: 'Influverse Creator',
+                        url: process.env.FRONTEND_URL || 'https://influverse.ch',
+                    },
+                    settings: {
+                        payments: {
+                            statement_descriptor: 'INFLUVERSE',
+                        },
                     },
                 });
                 connectId = account.id;

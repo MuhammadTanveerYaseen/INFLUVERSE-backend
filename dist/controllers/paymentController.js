@@ -45,9 +45,16 @@ exports.PaymentController = {
             const userId = (user._id || user.id).toString();
             const profile = yield CreatorProfile_1.default.findOne({ user: userId });
             const stripeId = profile === null || profile === void 0 ? void 0 : profile.stripeConnectId;
-            let stripeStatus = { details_submitted: false, payouts_enabled: false };
+            let stripeStatus = { details_submitted: false, payouts_enabled: false, charges_enabled: false };
             if (stripeId) {
                 stripeStatus = yield payment_service_1.PaymentService.getAccountStatus(stripeId);
+                // Store and refresh status in DB as per requirement
+                profile.stripeOnboardingStatus = {
+                    detailsSubmitted: stripeStatus.details_submitted,
+                    payoutsEnabled: stripeStatus.payouts_enabled,
+                    chargesEnabled: stripeStatus.charges_enabled
+                };
+                yield profile.save();
             }
             const transactions = yield Transaction_1.default.find({ user: userId }).sort({ createdAt: -1 });
             let pendingBalance = 0;

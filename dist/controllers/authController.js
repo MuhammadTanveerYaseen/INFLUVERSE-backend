@@ -25,9 +25,10 @@ const CreatorProfile_1 = __importDefault(require("../models/CreatorProfile"));
 // @route   POST /api/auth/forgot-password
 // @access  Public
 const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { email } = req.body;
+    const { email, language } = req.body;
     const normalizedEmail = email.toLowerCase().trim();
-    console.log(`[ForgotPassword] Request for: ${normalizedEmail}`);
+    const lang = (language === 'en' || language === 'de') ? language : 'de';
+    console.log(`[ForgotPassword] Request for: ${normalizedEmail} | Lang: ${lang}`);
     try {
         const user = yield User_1.default.findOne({ email: normalizedEmail });
         if (!user) {
@@ -45,8 +46,9 @@ const forgotPassword = (req, res) => __awaiter(void 0, void 0, void 0, function*
         yield User_1.default.findByIdAndUpdate(user._id || user.id, { resetPasswordToken, resetPasswordExpire });
         const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
         try {
-            console.log(`[ForgotPassword] Attempting to send email to: ${user.email}`);
-            (0, emailService_1.sendEmail)(user.email, 'Password Reset Request', emailService_1.emailTemplates.passwordReset(resetUrl)).catch(err => console.error(`[ForgotPassword] Failed to send email asynchronously: ${err.message}`));
+            console.log(`[ForgotPassword] Attempting to send email to: ${user.email} in ${lang}`);
+            const template = emailService_1.emailTemplates.passwordReset(resetUrl, lang);
+            (0, emailService_1.sendEmail)(user.email, template.subject, template.html).catch(err => console.error(`[ForgotPassword] Failed to send email asynchronously: ${err.message}`));
             res.status(200).json({ message: 'Email sent' });
         }
         catch (error) {

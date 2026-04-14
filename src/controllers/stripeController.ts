@@ -25,11 +25,19 @@ export const StripeController = {
 
             const account = await stripe.accounts.create({
                 type: 'express',
-                country: profile.country || 'US',
+                country: profile.country || 'CH',
                 email: req.user.email,
                 capabilities: {
                     card_payments: { requested: true },
                     transfers: { requested: true },
+                },
+                business_profile: {
+                    name: 'INFLUVERSE',
+                },
+                settings: {
+                    payments: {
+                        statement_descriptor: 'INFLUVERSE',
+                    },
                 },
             });
 
@@ -55,18 +63,47 @@ export const StripeController = {
                 return res.status(400).json({ message: 'No Stripe account found for this user. Create an account first.' });
             }
 
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const origin = req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:3000';
 
             const accountLink = await stripe.accountLinks.create({
                 account: profile.stripeConnectId,
-                refresh_url: `${frontendUrl}/dashboard/creator/wallet?refresh=true`,
-                return_url: `${frontendUrl}/dashboard/creator/wallet?success=true`,
+                refresh_url: `${origin}/dashboard/creator/wallet?refresh=true`,
+                return_url: `${origin}/dashboard/creator/wallet?success=true`,
                 type: 'account_onboarding',
             });
 
             res.status(200).json({ url: accountLink.url });
         } catch (error: any) {
             console.error('[Stripe] Onboarding Link Error:', error);
+            res.status(500).json({ message: error.message });
+        }
+    },
+
+    // 3. Sync Account Status
+    syncAccountStatus: async (req: Request | any, res: Response) => {
+        try {
+            const userId = req.user._id || req.user.id;
+            const profile = await CreatorProfile.findOne({ user: userId });
+
+            if (!profile || !profile.stripeConnectId) {
+                return res.status(400).json({ message: 'No Stripe account found' });
+            }
+
+            const account = await stripe.accounts.retrieve(profile.stripeConnectId);
+            
+            profile.stripeOnboardingStatus = {
+                detailsSubmitted: account.details_submitted,
+                payoutsEnabled: account.payouts_enabled,
+                chargesEnabled: account.charges_enabled
+            };
+
+            await profile.save();
+
+            res.status(200).json({
+                status: profile.stripeOnboardingStatus
+            });
+        } catch (error: any) {
+            console.error('[Stripe] Sync Status Error:', error);
             res.status(500).json({ message: error.message });
         }
     },
@@ -93,10 +130,13 @@ export const StripeController = {
                     const account = event.data.object as Stripe.Account;
                     const profile = await CreatorProfile.findOne({ stripeConnectId: account.id });
                     if (profile) {
-                        const isEnabled = account.charges_enabled && account.payouts_enabled;
-                        (profile as any).payoutsEnabled = isEnabled;
+                        profile.stripeOnboardingStatus = {
+                            detailsSubmitted: account.details_submitted,
+                            payoutsEnabled: account.payouts_enabled,
+                            chargesEnabled: account.charges_enabled,
+                        };
                         await profile.save();
-                        console.log(`[Stripe Webhook] Updated account ${account.id} payoutsEnabled: ${isEnabled}`);
+                        console.log(`[Stripe Webhook] Synced account ${account.id} status: payouts=${account.payouts_enabled}, charges=${account.charges_enabled}`);
                     }
                     break;
                 }

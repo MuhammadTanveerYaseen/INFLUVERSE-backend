@@ -66,8 +66,15 @@ app.use((req, res, next) => {
     res.status(404).json({ message: `Route ${req.originalUrl} not found on this server` });
 });
 // Error Handling Middleware
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 app.use((err, req, res, next) => {
     console.error(err.stack);
+    // Log to a file for hard-to-track upload issues!
+    try {
+        fs_1.default.appendFileSync(path_1.default.join(__dirname, 'debug_upload_error.txt'), `[${new Date().toISOString()}] Error Code: ${err.code} | Message: ${err.message} | HTTP: ${err.http_code} | Multer: ${err.field} \n${err.stack}\n\n`);
+    }
+    catch (e) { }
     // Handle Multer errors specially
     if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({ message: 'File is too large. Maximum allowed size is 50MB.' });
@@ -78,6 +85,10 @@ app.use((err, req, res, next) => {
     // Handle generic payload too large from express
     if (err.type === 'entity.too.large') {
         return res.status(413).json({ message: 'Request payload is too large.' });
+    }
+    // If Cloudinary specifically rejects it, check for HTTP code or specific structure
+    if (err.http_code && err.message) {
+        return res.status(err.http_code).json({ message: `Cloudinary Error: ${err.message}` });
     }
     res.status(500).json({ message: err.message || 'Internal Server Error' });
 });

@@ -26,24 +26,59 @@ const authController_1 = require("./authController");
 // @route   POST /api/brands/register
 // @access  Public
 const registerBrand = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    let { username, email, password, companyName } = req.body;
+    let { username, email, password, companyName, language } = req.body;
+    const normalizedEmail = email.toLowerCase().trim();
+    const lang = (language === 'en' || language === 'de') ? language : 'de';
     if (!username && companyName) {
         username = companyName.toLowerCase().replace(/[^a-z0-9]/g, '') + Math.floor(Math.random() * 1000);
     }
-    const userExists = yield User_1.default.findOne({ email });
-    if (userExists) {
-        res.status(400);
-        throw new Error('User already exists');
-    }
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const adminPanelUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/admin/users`;
+    // Check if a user with this email already exists
+    const existingByEmail = yield User_1.default.findOne({ email: normalizedEmail });
+    if (existingByEmail) {
+        // If already verified → genuine duplicate
+        if (existingByEmail.isVerified) {
+            return res.status(400).json({ message: 'An account with this email already exists. Please login.' });
+        }
+        // Unverified → refresh OTP and resend
+        existingByEmail.otp = otp;
+        existingByEmail.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+        existingByEmail.password = password;
+        existingByEmail.preferredLanguage = lang;
+        existingByEmail.verificationToken = crypto_1.default.randomBytes(20).toString('hex');
+        existingByEmail.verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        yield existingByEmail.save();
+        const template = emailService_1.emailTemplates.otpVerification(otp, lang);
+        yield (0, emailService_1.sendEmail)(existingByEmail.email, template.subject, template.html);
+        return res.status(200).json({
+            _id: existingByEmail._id,
+            username: existingByEmail.username,
+            email: existingByEmail.email,
+            role: existingByEmail.role,
+            requiresVerification: true,
+            message: "A new verification code has been sent to your email"
+        });
+    }
+    // Check if username is taken by a verified user
+    const existingByUsername = yield User_1.default.findOne({ username: username.toLowerCase().trim() });
+    if (existingByUsername && existingByUsername.isVerified) {
+        return res.status(400).json({ message: 'This username is already taken. Please choose another.' });
+    }
+    // Clean up stale unverified account with same username
+    if (existingByUsername && !existingByUsername.isVerified) {
+        yield BrandProfile_1.default.findOneAndDelete({ user: existingByUsername._id });
+        yield User_1.default.findByIdAndDelete(existingByUsername._id);
+    }
     const user = yield User_1.default.create({
         name: username,
         username,
-        email,
+        email: normalizedEmail,
         password,
         role: 'brand',
+        preferredLanguage: lang,
         otp,
-        otpExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        otpExpires: new Date(Date.now() + 10 * 60 * 1000),
         verificationToken: crypto_1.default.randomBytes(20).toString('hex'),
         verificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
         status: 'active',
@@ -55,8 +90,11 @@ const registerBrand = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             user: user._id,
             companyName: companyName || username,
         });
-        // Send Verification Email with OTP
-        yield (0, emailService_1.sendEmail)(user.email, 'Verify your Influverse Account', emailService_1.emailTemplates.otpVerification(otp));
+        // Send OTP to user (fire-and-forget)
+        const template = emailService_1.emailTemplates.otpVerification(otp, lang);
+        (0, emailService_1.sendEmail)(user.email, template.subject, template.html).catch(err => console.error('[BrandReg] OTP email failed:', err));
+        // Notify all admins (fire-and-forget)
+        (0, emailService_1.notifyAdmins)(emailService_1.emailTemplates.adminNewUserSignup(user.username, user.email, 'brand', adminPanelUrl)).catch(err => console.error('[BrandReg] Admin notify failed:', err));
         res.status(200).json({
             _id: user._id,
             username: user.username,

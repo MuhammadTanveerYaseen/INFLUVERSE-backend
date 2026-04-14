@@ -5,8 +5,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 export class PaymentService {
     // 1. Create Connect Account for Creator
-    static async createConnectAccountLink(user: any) {
+    static async createConnectAccountLink(user: any, origin?: string) {
         let accountId = user.stripeConnectId;
+        const baseOrigin = origin || process.env.FRONTEND_URL || 'http://localhost:3000';
 
         if (!accountId) {
             const profile = await CreatorProfile.findOne({ user: user._id || user.id });
@@ -16,11 +17,19 @@ export class PaymentService {
                 try {
                     const account = await stripe.accounts.create({
                         type: 'express',
-                        country: 'US',
+                        country: 'CH',
                         email: user.email,
                         capabilities: {
                             card_payments: { requested: true },
                             transfers: { requested: true },
+                        },
+                        business_profile: {
+                            name: 'INFLUVERSE',
+                        },
+                        settings: {
+                            payments: {
+                                statement_descriptor: 'INFLUVERSE',
+                            },
                         },
                     });
                     accountId = account.id;
@@ -42,8 +51,8 @@ export class PaymentService {
 
         const accountLink = await stripe.accountLinks.create({
             account: accountId,
-            refresh_url: `${process.env.FRONTEND_URL}/dashboard/creator/wallet?refresh=true`,
-            return_url: `${process.env.FRONTEND_URL}/dashboard/creator/wallet?success=true`,
+            refresh_url: `${baseOrigin}/dashboard/creator/wallet?refresh=true`,
+            return_url: `${baseOrigin}/dashboard/creator/wallet?success=true`,
             type: 'account_onboarding',
         });
 
@@ -64,11 +73,19 @@ export class PaymentService {
             const creatorUser = await require('../models/User').default.findById(creatorId);
             const account = await stripe.accounts.create({
                 type: 'express',
-                country: profile.country || 'US',
+                country: profile.country || 'CH',
                 email: creatorUser?.email || '',
                 capabilities: {
                     card_payments: { requested: true },
                     transfers: { requested: true },
+                },
+                business_profile: {
+                    name: 'INFLUVERSE',
+                },
+                settings: {
+                    payments: {
+                        statement_descriptor: 'INFLUVERSE',
+                    },
                 },
             });
             connectId = account.id;

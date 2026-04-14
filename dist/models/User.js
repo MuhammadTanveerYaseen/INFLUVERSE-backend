@@ -88,6 +88,11 @@ const userSchema = new mongoose_1.Schema({
         type: String,
         default: '',
     },
+    preferredLanguage: {
+        type: String,
+        enum: ['en', 'de'],
+        default: 'de',
+    },
     blockedUsers: [{
             type: mongoose_1.Schema.Types.ObjectId,
             ref: 'User',

@@ -18,6 +18,7 @@ const offer_service_1 = require("../services/offer.service");
 const chat_service_1 = require("../services/chat.service");
 const order_service_1 = require("../services/order.service");
 const notification_service_1 = require("../services/notification.service");
+const emailService_1 = require("../utils/emailService");
 const mongoose_1 = __importDefault(require("mongoose"));
 const createOffer = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -82,6 +83,9 @@ const createOffer = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             ? `${frontendUrl}/dashboard/brand/offers`
             : `${frontendUrl}/dashboard/creator/offers`;
         notification_service_1.NotificationService.sendOfferReceived(targetUser.id, targetUser.email, senderId, senderUser.username, Number(price), targetDashboardUrl).catch(err => console.error(err));
+        // Notify all admins about the new offer (fire-and-forget)
+        const adminPanelUrl = `${frontendUrl}/dashboard/admin`;
+        (0, emailService_1.notifyAdmins)(emailService_1.emailTemplates.adminNewOffer(senderUser.username, targetUser.username, Number(price), adminPanelUrl)).catch(err => console.error('[OfferCtrl] Admin notify failed:', err));
         res.status(201).json(offer);
     }
     catch (error) {

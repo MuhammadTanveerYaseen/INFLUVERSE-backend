@@ -87,6 +87,11 @@ const creatorProfileSchema = new mongoose_1.Schema({
     },
     phoneNumber: { type: String },
     stripeConnectId: { type: String },
+    stripeOnboardingStatus: {
+        detailsSubmitted: { type: Boolean, default: false },
+        payoutsEnabled: { type: Boolean, default: false },
+        chargesEnabled: { type: Boolean, default: false },
+    },
     bankDetails: {
         bankName: { type: String },
         accountHolderName: { type: String },
