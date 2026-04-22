@@ -18,9 +18,10 @@ const CreatorProfile_1 = __importDefault(require("../models/CreatorProfile"));
 const stripe = new stripe_1.default(process.env.STRIPE_SECRET_KEY);
 class PaymentService {
     // 1. Create Connect Account for Creator
-    static createConnectAccountLink(user) {
+    static createConnectAccountLink(user, origin) {
         return __awaiter(this, void 0, void 0, function* () {
             let accountId = user.stripeConnectId;
+            const baseOrigin = origin || process.env.FRONTEND_URL || 'http://localhost:3000';
             if (!accountId) {
                 const profile = yield CreatorProfile_1.default.findOne({ user: user._id || user.id });
                 if (profile && profile.stripeConnectId) {
@@ -30,15 +31,14 @@ class PaymentService {
                     try {
                         const account = yield stripe.accounts.create({
                             type: 'express',
-                            country: 'DE',
+                            country: 'CH',
                             email: user.email,
                             capabilities: {
                                 card_payments: { requested: true },
                                 transfers: { requested: true },
                             },
                             business_profile: {
-                                name: 'Influverse Creator',
-                                url: process.env.FRONTEND_URL || 'https://influverse.ch',
+                                name: 'INFLUVERSE',
                             },
                             settings: {
                                 payments: {
@@ -64,8 +64,8 @@ class PaymentService {
             }
             const accountLink = yield stripe.accountLinks.create({
                 account: accountId,
-                refresh_url: `${process.env.FRONTEND_URL}/dashboard/creator/wallet?refresh=true`,
-                return_url: `${process.env.FRONTEND_URL}/dashboard/creator/wallet?success=true`,
+                refresh_url: `${baseOrigin}/dashboard/creator/wallet?refresh=true`,
+                return_url: `${baseOrigin}/dashboard/creator/wallet?success=true`,
                 type: 'account_onboarding',
             });
             return accountLink.url;
@@ -82,38 +82,48 @@ class PaymentService {
                 throw new Error('Creator profile not found.');
             let connectId = profile.stripeConnectId;
             if (!connectId) {
-                const creatorUser = yield require('../models/User').default.findById(creatorId);
-                const account = yield stripe.accounts.create({
-                    type: 'express',
-                    country: profile.country || 'DE',
-                    email: (creatorUser === null || creatorUser === void 0 ? void 0 : creatorUser.email) || '',
-                    capabilities: {
-                        card_payments: { requested: true },
-                        transfers: { requested: true },
-                    },
-                    business_profile: {
-                        name: 'Influverse Creator',
-                        url: process.env.FRONTEND_URL || 'https://influverse.ch',
-                    },
-                    settings: {
-                        payments: {
-                            statement_descriptor: 'INFLUVERSE',
+                try {
+                    const creatorUser = yield require('../models/User').default.findById(creatorId);
+                    const account = yield stripe.accounts.create({
+                        type: 'express',
+                        country: profile.country || 'CH',
+                        email: (creatorUser === null || creatorUser === void 0 ? void 0 : creatorUser.email) || '',
+                        capabilities: {
+                            card_payments: { requested: true },
+                            transfers: { requested: true },
                         },
-                    },
-                });
-                connectId = account.id;
-                profile.stripeConnectId = connectId;
-                profile.payoutsEnabled = false;
-                yield profile.save();
+                        business_profile: {
+                            name: 'INFLUVERSE',
+                        },
+                        settings: {
+                            payments: {
+                                statement_descriptor: 'INFLUVERSE',
+                            },
+                        },
+                    });
+                    connectId = account.id;
+                    profile.stripeConnectId = connectId;
+                    profile.payoutsEnabled = false;
+                    yield profile.save();
+                    console.log(`[Stripe] Auto-created Connect account ${connectId} for creator ${creatorId}`);
+                }
+                catch (error) {
+                    // If it fails because Connect is not enabled, we LOG it but don't block the payment
+                    // since the current implementation doesn't yet use destination charges.
+                    console.warn(`[Stripe] Could not auto-create Connect account: ${error.message}. Proceeding with platform payment.`);
+                }
             }
-            const paymentIntent = yield stripe.paymentIntents.create({
+            const paymentIntentOptions = {
                 amount: amountInCents,
                 currency: 'eur',
                 metadata: { orderId },
                 automatic_payment_methods: {
                     enabled: true,
                 }
-            });
+            };
+            // If we have a connectId AND Connect is actually enabled for the platform, 
+            // we could add destination/fee here. For now, we keep it simple to avoid breaking checkout.
+            const paymentIntent = yield stripe.paymentIntents.create(paymentIntentOptions);
             return paymentIntent;
         });
     }

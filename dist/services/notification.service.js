@@ -149,11 +149,8 @@ class NotificationService {
                 ? `Creator hat angenommen! Bitte schließe die Zahlung für Bestellung #${orderId.substring(orderId.length - 6).toUpperCase()} ab, um die Kampagne zu starten.`
                 : `Creator accepted! Please complete payment for order #${orderId.substring(orderId.length - 6).toUpperCase()} to start the campaign.`, 'payment', link);
             // Email
-            const subject = lang === 'de' ? 'Aktion erforderlich: Schließe deine Influverse-Zahlung ab' : 'Action Required: Complete your Influverse Payment';
-            const content = lang === 'de'
-                ? `Der Creator hat dein Angebot angenommen! Um die Kampagne offiziell zu starten und den Zeitraum zu sichern, schließe bitte die Zahlung ab unter: ${link}`
-                : `The creator has accepted your offer! To officially start the campaign and secure the timeframe, please complete the payment at: ${link}`;
-            (0, emailService_1.sendEmail)(email, subject, content).catch(err => console.error('Failed to send email:', err));
+            const template = emailService_1.emailTemplates.paymentRequired(orderId.substring(orderId.length - 6).toUpperCase(), link, lang);
+            (0, emailService_1.sendEmail)(email, template.subject, template.html).catch(err => console.error('Failed to send email:', err));
         });
     }
     static sendPaymentConfirmed(recipientId_1, email_1, orderId_1, link_1) {

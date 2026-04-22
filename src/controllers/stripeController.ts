@@ -49,7 +49,14 @@ export const StripeController = {
             res.status(200).json({ stripe_account_id: account.id });
         } catch (error: any) {
             console.error('[Stripe] Create Account Error:', error);
-            res.status(500).json({ message: error.message });
+            
+            let message = error.message;
+            if (error.raw?.message?.includes('signed up for Connect') || error.message?.includes('signed up for Connect')) {
+                message = "Stripe Connect is not enabled on your Stripe Dashboard. Please enable 'Connect' in your Stripe settings (https://dashboard.stripe.com/connect) to onboard creators.";
+            }
+
+            const statusCode = error.type === 'StripeInvalidRequestError' || error.raw?.message?.includes('Connect') ? 403 : 500;
+            res.status(statusCode).json({ message });
         }
     },
 
@@ -75,7 +82,14 @@ export const StripeController = {
             res.status(200).json({ url: accountLink.url });
         } catch (error: any) {
             console.error('[Stripe] Onboarding Link Error:', error);
-            res.status(500).json({ message: error.message });
+            
+            let message = error.message;
+            if (error.raw?.message?.includes('signed up for Connect') || error.message?.includes('signed up for Connect')) {
+                message = "Stripe Connect is not enabled on your Stripe Dashboard. Please enable 'Connect' in your Stripe settings (https://dashboard.stripe.com/connect) to onboard creators.";
+            }
+
+            const statusCode = error.type === 'StripeInvalidRequestError' || error.raw?.message?.includes('Connect') ? 403 : 500;
+            res.status(statusCode).json({ message });
         }
     },
 

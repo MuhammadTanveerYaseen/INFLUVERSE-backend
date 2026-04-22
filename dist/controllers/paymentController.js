@@ -29,7 +29,7 @@ exports.PaymentController = {
             if (user.role !== 'creator') {
                 return res.status(403).json({ message: 'Only creators can onboard for payouts' });
             }
-            const url = yield payment_service_1.PaymentService.createConnectAccountLink(user);
+            const url = yield payment_service_1.PaymentService.createConnectAccountLink(user, req.headers.origin);
             res.json({ url });
         }
         catch (error) {

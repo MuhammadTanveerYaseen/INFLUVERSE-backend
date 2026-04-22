@@ -70,38 +70,50 @@ export class PaymentService {
 
         let connectId = profile.stripeConnectId;
         if (!connectId) {
-            const creatorUser = await require('../models/User').default.findById(creatorId);
-            const account = await stripe.accounts.create({
-                type: 'express',
-                country: profile.country || 'CH',
-                email: creatorUser?.email || '',
-                capabilities: {
-                    card_payments: { requested: true },
-                    transfers: { requested: true },
-                },
-                business_profile: {
-                    name: 'INFLUVERSE',
-                },
-                settings: {
-                    payments: {
-                        statement_descriptor: 'INFLUVERSE',
+            try {
+                const creatorUser = await require('../models/User').default.findById(creatorId);
+                const account = await stripe.accounts.create({
+                    type: 'express',
+                    country: profile.country || 'CH',
+                    email: creatorUser?.email || '',
+                    capabilities: {
+                        card_payments: { requested: true },
+                        transfers: { requested: true },
                     },
-                },
-            });
-            connectId = account.id;
-            profile.stripeConnectId = connectId;
-            (profile as any).payoutsEnabled = false;
-            await profile.save();
+                    business_profile: {
+                        name: 'INFLUVERSE',
+                    },
+                    settings: {
+                        payments: {
+                            statement_descriptor: 'INFLUVERSE',
+                        },
+                    },
+                });
+                connectId = account.id;
+                profile.stripeConnectId = connectId;
+                (profile as any).payoutsEnabled = false;
+                await profile.save();
+                console.log(`[Stripe] Auto-created Connect account ${connectId} for creator ${creatorId}`);
+            } catch (error: any) {
+                // If it fails because Connect is not enabled, we LOG it but don't block the payment
+                // since the current implementation doesn't yet use destination charges.
+                console.warn(`[Stripe] Could not auto-create Connect account: ${error.message}. Proceeding with platform payment.`);
+            }
         }
 
-        const paymentIntent = await stripe.paymentIntents.create({
+        const paymentIntentOptions: Stripe.PaymentIntentCreateParams = {
             amount: amountInCents,
             currency: 'eur',
             metadata: { orderId },
             automatic_payment_methods: {
                 enabled: true,
             }
-        });
+        };
+
+        // If we have a connectId AND Connect is actually enabled for the platform, 
+        // we could add destination/fee here. For now, we keep it simple to avoid breaking checkout.
+        
+        const paymentIntent = await stripe.paymentIntents.create(paymentIntentOptions);
 
         return paymentIntent;
     }

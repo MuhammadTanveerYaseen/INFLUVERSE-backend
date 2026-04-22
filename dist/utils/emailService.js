@@ -267,6 +267,15 @@ exports.emailTemplates = {
         const cta = lang === 'de' ? 'Chat öffnen' : 'Open Chat';
         return { subject, html: wrapEmail(title, content, cta, link) };
     },
+    paymentRequired: (orderId, link = '#', lang = 'en') => {
+        const subject = lang === 'de' ? 'Aktion erforderlich: Schließe deine Influverse-Zahlung ab' : 'Action Required: Complete your Influverse Payment';
+        const title = lang === 'de' ? 'Zahlung erforderlich 💳' : 'Payment Required 💳';
+        const content = lang === 'de'
+            ? `<p>Hallo,</p><p>Der Creator hat dein Angebot angenommen! Um die Kampagne für Bestellung <strong>#${orderId}</strong> offiziell zu starten und den Zeitraum zu sichern, schließe bitte die Zahlung ab.</p>`
+            : `<p>Hello,</p><p>The creator has accepted your offer! To officially start the campaign for Order <strong>#${orderId}</strong> and secure the timeframe, please complete the payment.</p>`;
+        const cta = lang === 'de' ? 'Jetzt bezahlen' : 'Pay Now';
+        return { subject, html: wrapEmail(title, content, cta, link) };
+    },
     paymentConfirmation: (orderId, link = '#', lang = 'en') => {
         const subject = lang === 'de' ? `Zahlung erfolgreich — Bestellung #${orderId}` : `Payment successful — Order #${orderId}`;
         const title = lang === 'de' ? 'Zahlung bestätigt ✓' : 'Payment Confirmed ✓';

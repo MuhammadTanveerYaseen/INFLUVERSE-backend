@@ -233,15 +233,12 @@ export class NotificationService {
         );
 
         // Email
-        const subject = lang === 'de' ? 'Aktion erforderlich: Schließe deine Influverse-Zahlung ab' : 'Action Required: Complete your Influverse Payment';
-        const content = lang === 'de'
-            ? `Der Creator hat dein Angebot angenommen! Um die Kampagne offiziell zu starten und den Zeitraum zu sichern, schließe bitte die Zahlung ab unter: ${link}`
-            : `The creator has accepted your offer! To officially start the campaign and secure the timeframe, please complete the payment at: ${link}`;
+        const template = emailTemplates.paymentRequired(orderId.substring(orderId.length - 6).toUpperCase(), link, lang);
         
         sendEmail(
             email,
-            subject,
-            content
+            template.subject,
+            template.html
         ).catch(err => console.error('Failed to send email:', err));
     }
 
