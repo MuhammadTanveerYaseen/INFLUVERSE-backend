@@ -1,0 +1,59 @@
+
+[2026-04-26T05:26:00.717Z] Attempting to send to: testbrand2029@example.com | Subject: Verify your Influverse account
+[2026-04-26T05:26:00.943Z] Attempting to send to: team@influverse.ch | Subject: [Admin] New Brand joined Influverse — testco644
+[2026-04-26T05:26:00.946Z] Attempting to send to: etsy5963@gmail.com | Subject: [Admin] New Brand joined Influverse — testco644
+[2026-04-26T05:26:01.591Z] Attempting to send to: testbrand2029@example.com | Subject: Welcome to Influverse for Brands!
+[2026-04-26T05:26:03.813Z] CRITICAL ERROR sending to testbrand2029@example.com: Can't send mail - all recipients were rejected: 451-Unroutable recipient address: testbrand2029@example.com - Could not find
+451-any mailserver for recipient domain example.com. Retry again later or
+451 contact https://support.hostpoint.ch for further assistance. 
+ Error: Can't send mail - all recipients were rejected: 451-Unroutable recipient address: testbrand2029@example.com - Could not find
+451-any mailserver for recipient domain example.com. Retry again later or
+451 contact https://support.hostpoint.ch for further assistance.
+    at SMTPConnection._formatError (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:814:19)
+    at SMTPConnection._actionRCPT (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:1712:28)
+    at SMTPConnection.<anonymous> (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:1665:30)
+    at SMTPConnection._processResponse (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:998:20)
+    at SMTPConnection._onData (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:774:14)
+    at TLSSocket.SMTPConnection._onSocketData (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:195:44)
+    at TLSSocket.emit (node:events:508:28)
+    at TLSSocket.emit (node:domain:489:12)
+    at addChunk (node:internal/streams/readable:559:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
+[2026-04-26T05:26:04.041Z] CRITICAL ERROR sending to testbrand2029@example.com: Can't send mail - all recipients were rejected: 451-Unroutable recipient address: testbrand2029@example.com - Could not find
+451-any mailserver for recipient domain example.com. Retry again later or
+451 contact https://support.hostpoint.ch for further assistance. 
+ Error: Can't send mail - all recipients were rejected: 451-Unroutable recipient address: testbrand2029@example.com - Could not find
+451-any mailserver for recipient domain example.com. Retry again later or
+451 contact https://support.hostpoint.ch for further assistance.
+    at SMTPConnection._formatError (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:814:19)
+    at SMTPConnection._actionRCPT (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:1712:28)
+    at SMTPConnection.<anonymous> (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:1665:30)
+    at SMTPConnection._processResponse (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:998:20)
+    at SMTPConnection._onData (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:774:14)
+    at TLSSocket.SMTPConnection._onSocketData (C:\Users\Tanveer\Desktop\INFLUVERSE\api-service\node_modules\nodemailer\lib\smtp-connection\index.js:195:44)
+    at TLSSocket.emit (node:events:508:28)
+    at TLSSocket.emit (node:domain:489:12)
+    at addChunk (node:internal/streams/readable:559:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
+[2026-04-26T05:26:04.292Z] SUCCESS! Message ID: <06fe0096-7b80-1019-4660-360122170599@influverse.ch> | Target: etsy5963@gmail.com
+[2026-04-26T05:26:04.370Z] SUCCESS! Message ID: <e5010e29-e03f-6655-b02b-b37ceb8cb27f@influverse.ch> | Target: team@influverse.ch
+[2026-04-26T05:36:44.733Z] Attempting to send to: seebizhrshahildali@gmail.com | Subject: Verifiziere dein Influverse Konto
+[2026-04-26T05:36:44.897Z] Attempting to send to: team@influverse.ch | Subject: [Admin] New Brand joined Influverse — beauty564
+[2026-04-26T05:36:44.900Z] Attempting to send to: etsy5963@gmail.com | Subject: [Admin] New Brand joined Influverse — beauty564
+[2026-04-26T05:36:48.662Z] SUCCESS! Message ID: <ecc117a5-0023-0a8a-a1d9-f17df1c26930@influverse.ch> | Target: etsy5963@gmail.com
+[2026-04-26T05:36:48.832Z] SUCCESS! Message ID: <3516ba54-aa6e-6ff7-d236-4991eb346893@influverse.ch> | Target: team@influverse.ch
+[2026-04-26T05:36:48.857Z] SUCCESS! Message ID: <a6fe1fb7-0de7-e7ec-5404-f5d6191b7d87@influverse.ch> | Target: seebizhrshahildali@gmail.com
+[2026-04-26T05:37:30.707Z] Attempting to send to: seebizhrshahildali@gmail.com | Subject: Willkommen bei Influverse für Brands!
+[2026-04-26T05:37:34.342Z] SUCCESS! Message ID: <6a8a25cd-12c4-debc-9d45-57c3c8ff8320@influverse.ch> | Target: seebizhrshahildali@gmail.com
+[2026-04-26T06:08:43.869Z] Attempting to send to: muhammadtanveer0135@gmail.com | Subject: New offer from beauty564
+[2026-04-26T06:08:47.608Z] SUCCESS! Message ID: <12c790a0-b237-f38d-680d-345e570b1578@influverse.ch> | Target: muhammadtanveer0135@gmail.com
+[2026-04-26T06:09:35.496Z] Attempting to send to: seebizhrshahildali@gmail.com | Subject: Dein Angebot wurde angenommen
+[2026-04-26T06:09:35.711Z] Attempting to send to: seebizhrshahildali@gmail.com | Subject: Aktion erforderlich: Schließe deine Influverse-Zahlung ab
+[2026-04-26T06:09:38.309Z] SUCCESS! Message ID: <1b76c585-38d4-d8ea-4c70-ad82e6f7eaf2@influverse.ch> | Target: seebizhrshahildali@gmail.com
+[2026-04-26T06:09:38.572Z] SUCCESS! Message ID: <a98a851b-5537-a144-80a8-1b47b90d8c88@influverse.ch> | Target: seebizhrshahildali@gmail.com
+[2026-04-26T06:19:56.376Z] Attempting to send to: muhammadtanveer0135@gmail.com | Subject: New offer from beauty564
+[2026-04-26T06:20:00.297Z] SUCCESS! Message ID: <4ef06159-5513-fa23-a9d6-6846d7cb14c5@influverse.ch> | Target: muhammadtanveer0135@gmail.com
+[2026-04-26T06:20:11.713Z] Attempting to send to: seebizhrshahildali@gmail.com | Subject: Dein Angebot wurde angenommen
+[2026-04-26T06:20:11.851Z] Attempting to send to: seebizhrshahildali@gmail.com | Subject: Aktion erforderlich: Schließe deine Influverse-Zahlung ab
+[2026-04-26T06:20:14.546Z] SUCCESS! Message ID: <073b233b-8b4b-f3e6-f8ff-9c4e3af3de4c@influverse.ch> | Target: seebizhrshahildali@gmail.com
+[2026-04-26T06:20:14.550Z] SUCCESS! Message ID: <b4589036-6e61-496d-d6db-b037360e881d@influverse.ch> | Target: seebizhrshahildali@gmail.com

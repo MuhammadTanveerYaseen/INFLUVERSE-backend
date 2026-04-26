@@ -254,12 +254,20 @@ export const getCreatorById = async (req: Request, res: Response) => {
         const isObjectId = mongoose.Types.ObjectId.isValid(idOrUsername);
 
         if (isObjectId) {
-            profile = await CreatorProfile.findOne({ user: idOrUsername }).populate('user', 'username email status isVerified');
+            profile = await CreatorProfile.findOneAndUpdate(
+                { user: idOrUsername },
+                { $inc: { 'stats.profileViews': 1 } },
+                { new: true }
+            ).populate('user', 'username email status isVerified');
         } else {
             const user = await User.findOne({ username: new RegExp(`^${idOrUsername}$`, 'i') });
 
             if (user) {
-                profile = await CreatorProfile.findOne({ user: user._id }).populate('user', 'username email status isVerified');
+                profile = await CreatorProfile.findOneAndUpdate(
+                    { user: user._id },
+                    { $inc: { 'stats.profileViews': 1 } },
+                    { new: true }
+                ).populate('user', 'username email status isVerified');
             }
         }
 
@@ -282,6 +290,9 @@ export const getCreatorDashboardStats = async (req: Request | any, res: Response
         const objectId = new mongoose.Types.ObjectId(creatorId);
 
         // 1. Basic Stats
+        const creatorProfileInfo = await CreatorProfile.findOne({ user: objectId });
+        const profileViewsCount = creatorProfileInfo?.stats?.profileViews || 0;
+
         const [activeOrdersCount, pendingOffersCount, totalEarningsResult] = await Promise.all([
             Order.countDocuments({
                 creator: creatorId,
@@ -350,7 +361,7 @@ export const getCreatorDashboardStats = async (req: Request | any, res: Response
                 activeOrders: activeOrdersCount,
                 pendingOffers: pendingOffersCount,
                 totalEarnings,
-                profileViews: 124 // Mocking for now
+                profileViews: profileViewsCount
             },
             charts: {
                 earningsTrend,

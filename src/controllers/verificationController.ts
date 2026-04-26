@@ -33,6 +33,22 @@ export const verifyEmail = async (req: Request, res: Response) => {
         user.verificationTokenExpires = undefined;
         await user.save();
 
+        // Send Welcome Email Setup
+        const frontendUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+        try {
+            if (user.role === 'creator') {
+                const template = emailTemplates.welcomeCreator(`${frontendUrl}/dashboard/creator`, (user as any).preferredLanguage || 'de');
+                console.log(`[Verification] Dispatching Welcome Creator Email to: ${user.email}`);
+                await sendEmail(user.email, template.subject, template.html);
+            } else if (user.role === 'brand') {
+                const template = emailTemplates.welcomeBrand(`${frontendUrl}/marketplace`, (user as any).preferredLanguage || 'de');
+                console.log(`[Verification] Dispatching Welcome Brand Email to: ${user.email}`);
+                await sendEmail(user.email, template.subject, template.html);
+            }
+        } catch (emailError: any) {
+            console.error('[Verification] Failed to send strictly awaited welcome email:', emailError);
+        }
+
         res.json({ message: "Email Verified Successfully! You can now login." });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -103,6 +119,22 @@ export const verifyOTP = async (req: Request, res: Response) => {
         user.verificationToken = undefined;
         user.verificationTokenExpires = undefined;
         await user.save();
+
+        // Send Welcome Email Setup
+        const frontendUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+        try {
+            if (user.role === 'creator') {
+                const template = emailTemplates.welcomeCreator(`${frontendUrl}/dashboard/creator/profile`, (user as any).preferredLanguage || 'de');
+                console.log(`[Verification] Dispatching Welcome Creator Email to: ${user.email}`);
+                await sendEmail(user.email, template.subject, template.html);
+            } else if (user.role === 'brand') {
+                const template = emailTemplates.welcomeBrand(`${frontendUrl}/marketplace`, (user as any).preferredLanguage || 'de');
+                console.log(`[Verification] Dispatching Welcome Brand Email to: ${user.email}`);
+                await sendEmail(user.email, template.subject, template.html);
+            }
+        } catch (emailError: any) {
+            console.error('[Verification] Failed to send strictly awaited welcome email:', emailError);
+        }
 
         // Generate Token
         const token = jwt.sign(

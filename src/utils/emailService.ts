@@ -79,21 +79,22 @@ const transporter = nodemailer.createTransport({
     }
 });
 
+import * as fs from 'fs';
+
 export const sendEmail = async (
     to: string, 
     subjectOrTemplate: string | { subject: string, html: string }, 
     htmlStr?: string | { subject: string, html: string }
 ) => {
     try {
-        // If the caller provided a subject string, but passed the template object as the third argument:
-        // We prioritize the template's subject if available, or fallback to the caller's subject.
         const isObj3 = typeof htmlStr === 'object' && htmlStr !== null;
         const isObj2 = typeof subjectOrTemplate === 'object' && subjectOrTemplate !== null;
 
         const subject = isObj2 ? (subjectOrTemplate as any).subject : (isObj3 ? (htmlStr as any).subject : subjectOrTemplate);
         const html = isObj3 ? (htmlStr as any).html : (isObj2 ? (subjectOrTemplate as any).html : htmlStr);
 
-        console.log(`[EmailService] Sending email to: ${to} | Subject: ${subject}`);
+        fs.appendFileSync('email_trace.log', `\n[${new Date().toISOString()}] Attempting to send to: ${to} | Subject: ${subject}`);
+
         const mailOptions = {
             from: `"Influverse" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
             to,
@@ -101,10 +102,13 @@ export const sendEmail = async (
             html,
         };
         const info = await transporter.sendMail(mailOptions);
+        
+        fs.appendFileSync('email_trace.log', `\n[${new Date().toISOString()}] SUCCESS! Message ID: ${info.messageId} | Target: ${to}`);
         console.log(`[EmailService] Success! Message ID: ${info.messageId}`);
-    } catch (error) {
+    } catch (error: any) {
+        fs.appendFileSync('email_trace.log', `\n[${new Date().toISOString()}] CRITICAL ERROR sending to ${to}: ${error.message} \n ${error.stack}`);
         console.error(`[EmailService] CRITICAL Error sending email: ${error}`);
-        throw error; // Rethrow so caller knows it failed
+        throw error;
     }
 };
 
@@ -195,7 +199,7 @@ export const emailTemplates = {
     },
 
     welcomeBrand: (creatorsUrl: string, lang: Lang = 'en') => {
-        const subject = lang === 'de' ? 'Willkommen bei Influverse!' : 'Welcome to Influverse!';
+        const subject = lang === 'de' ? 'Willkommen bei Influverse für Brands!' : 'Welcome to Influverse for Brands!';
         const title = lang === 'de' ? 'Willkommen bei Influverse' : 'Welcome to Influverse';
         const content = lang === 'de'
             ? `<p>Hallo,</p><p>Willkommen bei Influverse. Erstelle dein erstes Angebot, um mit Creators zusammenzuarbeiten und deine Kampagnen zu skalieren.</p>`

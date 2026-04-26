@@ -169,8 +169,9 @@ export const respondToOffer = async (req: Request | any, res: Response) => {
             updatedOffer.order = order._id as any;
             await updatedOffer.save();
 
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
             if (originalSenderUser) {
-                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
                 const dashboardRole = originalSenderUser.role === 'brand' ? 'brand' : 'creator';
                 
                 NotificationService.sendOfferStatusUpdate(
@@ -179,18 +180,19 @@ export const respondToOffer = async (req: Request | any, res: Response) => {
                     userId,
                     responderUser.username,
                     'accepted',
-                    `${frontendUrl}/dashboard/brand/orders`
+                    `${frontendUrl}/dashboard/${dashboardRole}/orders`
                 ).catch(err => console.error(err));
+            }
 
-                // Add a specific payment notification for brands
-                if (originalSenderUser.role === 'brand') {
-                    NotificationService.sendPaymentRequired(
-                        originalSenderUser.id,
-                        originalSenderUser.email,
-                        order._id.toString(),
-                        `${frontendUrl}/dashboard/brand/checkout/${order._id}`
-                    ).catch(err => console.error(err));
-                }
+            // Always send payment notification to the Brand, regardless of who created the offer
+            const brandUser = await mongoose.model('User').findById(updatedOffer.brand);
+            if (brandUser) {
+                NotificationService.sendPaymentRequired(
+                    brandUser.id,
+                    brandUser.email,
+                    order._id.toString(),
+                    `${frontendUrl}/dashboard/brand/checkout/${order._id}`
+                ).catch(err => console.error('[OfferCtrl] Failed to send Payment Required email:', err));
             }
 
             return res.json({ message: 'Offer accepted, Order created', orderId: order._id });

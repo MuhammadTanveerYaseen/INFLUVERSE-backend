@@ -41,6 +41,7 @@ export interface ICreatorProfile extends Document {
         completedOrders: number;
         rating: number; // Avg rating
         reviewCount: number;
+        profileViews: number;
     };
     verified: boolean;
     isFeatured: boolean;
@@ -108,7 +109,8 @@ const creatorProfileSchema: Schema = new Schema({
         engagementRate: { type: Number, default: 0 },
         completedOrders: { type: Number, default: 0 },
         rating: { type: Number, default: 0 },
-        reviewCount: { type: Number, default: 0 }
+        reviewCount: { type: Number, default: 0 },
+        profileViews: { type: Number, default: 0 }
     },
     verified: { type: Boolean, default: false },
     isFeatured: { type: Boolean, default: false },
