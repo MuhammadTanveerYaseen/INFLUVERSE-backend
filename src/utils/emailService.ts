@@ -373,5 +373,30 @@ export const emailTemplates = {
                 </tr>
             </table>`;
         return { subject, html: wrapEmail(title, content, 'Open Admin Panel', adminPanelUrl) };
-    }
+    },
+
+    profileApproved: (username: string, dashboardUrl: string, adminNote?: string) => {
+        const subject = '🎉 Your Influverse Creator profile has been approved!';
+        const title = 'Profile Approved ✓';
+        const noteBlock = adminNote
+            ? `<blockquote style="border-left:3px solid #22c55e;padding-left:16px;margin:16px 0;color:#5a5a7a;font-style:italic;text-align:left;">Note from our team: ${adminNote}</blockquote>`
+            : '';
+        const content = `
+            <p>Hello <strong>@${username}</strong>,</p>
+            <p>Great news! Your creator profile has been <strong style="color:#22c55e;">approved</strong> by our team. Your profile is now live on Influverse and brands can start discovering you.</p>
+            ${noteBlock}
+            <p>Complete your profile to maximise visibility and start receiving collaboration offers.</p>`;
+        return { subject, html: wrapEmail(title, content, 'Go to Dashboard', dashboardUrl) };
+    },
+
+    profileRejected: (username: string, profileUrl: string, reason: string) => {
+        const subject = 'Your Influverse Creator profile needs some changes';
+        const title = 'Profile Update Required';
+        const content = `
+            <p>Hello <strong>@${username}</strong>,</p>
+            <p>Thank you for submitting your creator profile. After reviewing it, our team has requested the following changes before we can approve it:</p>
+            <blockquote style="border-left:3px solid #ef4444;padding-left:16px;margin:16px 0;color:#5a5a7a;font-style:italic;text-align:left;">${reason}</blockquote>
+            <p>Please update your profile and re-submit for review. If you have any questions, feel free to reach out to our support team.</p>`;
+        return { subject, html: wrapEmail(title, content, 'Update My Profile', profileUrl) };
+    },
 };

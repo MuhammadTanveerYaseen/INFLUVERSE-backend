@@ -10,6 +10,7 @@ import Chat from '../models/Chat';
 import Message from '../models/Message';
 import BrandProfile from '../models/BrandProfile';
 import redisClient from '../config/redis';
+import { sendEmail, emailTemplates } from '../utils/emailService';
 
 
 // @desc    Get All Users (Admin)
@@ -122,6 +123,32 @@ export const verifyCreator = async (req: Request, res: Response) => {
 
     await creatorUser.save();
     const updatedProfile = await profile.save();
+
+    // ── Send notification email to the creator ──────────────────────────────
+    const frontendUrl = process.env.FRONTEND_URL || 'https://influverse.ch';
+    try {
+        if (status === 'approved') {
+            const dashboardUrl = `${frontendUrl}/dashboard/creator`;
+            const tmpl = emailTemplates.profileApproved(
+                creatorUser.username,
+                dashboardUrl,
+                reason || undefined   // optional admin note for approvals
+            );
+            sendEmail(creatorUser.email, tmpl.subject, tmpl.html)
+                .catch(err => console.error('[verifyCreator] Approval email failed:', err));
+        } else if (status === 'rejected') {
+            const profileUrl = `${frontendUrl}/dashboard/creator/profile`;
+            const tmpl = emailTemplates.profileRejected(
+                creatorUser.username,
+                profileUrl,
+                reason || 'Please review your profile and ensure all required fields are complete and accurate.'
+            );
+            sendEmail(creatorUser.email, tmpl.subject, tmpl.html)
+                .catch(err => console.error('[verifyCreator] Rejection email failed:', err));
+        }
+    } catch (emailErr) {
+        console.error('[verifyCreator] Email dispatch error:', emailErr);
+    }
 
     if (redisClient.isReady) {
         const keys = await redisClient.keys('creators_*');

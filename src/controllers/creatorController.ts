@@ -243,6 +243,47 @@ export const getCreators = async (req: Request, res: Response) => {
     }
 };
 
+// @desc    Preview Creator Profile (for the creator themselves or admin — bypasses status gate)
+// @route   GET /api/creators/preview/:id
+// @access  Private (Creator owner or Admin)
+export const getCreatorPreview = async (req: Request | any, res: Response) => {
+    try {
+        const idOrUsername = req.params.id as string;
+        const requestingUser = req.user;
+
+        let profile = null;
+        const isObjectId = mongoose.Types.ObjectId.isValid(idOrUsername);
+
+        if (isObjectId) {
+            profile = await CreatorProfile.findOne({ user: idOrUsername })
+                .populate('user', 'username email status isVerified createdAt');
+        } else {
+            const user = await User.findOne({ username: new RegExp(`^${idOrUsername}$`, 'i') });
+            if (user) {
+                profile = await CreatorProfile.findOne({ user: user._id })
+                    .populate('user', 'username email status isVerified createdAt');
+            }
+        }
+
+        if (!profile) {
+            return res.status(404).json({ message: 'Creator profile not found' });
+        }
+
+        const profileUserId = (profile.user as any)?._id?.toString() || profile.user?.toString();
+        const requestingUserId = requestingUser._id?.toString() || requestingUser.id?.toString();
+        const isOwner = profileUserId === requestingUserId;
+        const isAdmin = requestingUser.role === 'admin';
+
+        if (!isOwner && !isAdmin) {
+            return res.status(403).json({ message: 'Access denied: You can only preview your own profile' });
+        }
+
+        res.json(profile);
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // @desc    Get Creator by ID or Username (Public Profile)
 // @route   GET /api/creators/:id
 // @access  Public
