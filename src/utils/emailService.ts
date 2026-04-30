@@ -399,4 +399,17 @@ export const emailTemplates = {
             <p>Please update your profile and re-submit for review. If you have any questions, feel free to reach out to our support team.</p>`;
         return { subject, html: wrapEmail(title, content, 'Update My Profile', profileUrl) };
     },
+
+    adminProfileReviewRequest: (username: string, email: string, adminPanelUrl: string) => {
+        const subject = `[Action Required] Creator Profile Review Request — @${username}`;
+        const title = 'Profile Submission for Review';
+        const content = `
+            <p>The creator <strong>@${username}</strong> (${email}) has just submitted their profile for review.</p>
+            <p>Please review the profile details and portfolio to approve or reject the application.</p>
+            <div style="background:#F5F5FA;padding:16px;border-radius:12px;margin:20px 0;text-align:left;">
+                <p style="margin:0 0 4px;font-size:12px;color:#9090aa;text-transform:uppercase;font-weight:900;">User Info</p>
+                <p style="margin:0;font-weight:700;color:#1a1a2e;">${username} (${email})</p>
+            </div>`;
+        return { subject, html: wrapEmail(title, content, 'Review in Admin Panel', adminPanelUrl) };
+    },
 };

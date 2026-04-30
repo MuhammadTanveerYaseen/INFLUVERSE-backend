@@ -91,6 +91,8 @@ export const registerCreator = async (req: Request, res: Response) => {
             user: user._id,
             stats: { completedOrders: 0, engagementRate: 0, followerCount: 0, rating: 0, reviewCount: 0 },
             verified: false,
+            onboardingStep: 0,
+            onboardingCompleted: false
         });
 
         // Send OTP to user (fire-and-forget)
@@ -163,6 +165,12 @@ export const updateCreatorProfile = async (req: Request | any, res: Response) =>
         if (req.body.submitForReview && (user.status === 'rejected' || user.status === 'active' || !user.status || user.status === 'pending')) {
             user.status = 'pending';
             user.rejectionReason = undefined;
+
+            // Notify admins about the review request
+            const adminPanelUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/admin/users`;
+            notifyAdmins(
+                emailTemplates.adminProfileReviewRequest(user.username, user.email, adminPanelUrl)
+            ).catch(err => console.error('[ProfileReview] Admin notify failed:', err));
         }
 
         const updatedUser = await user.save();

@@ -25,6 +25,7 @@ export interface IPlatform {
 
 export interface ICreatorProfile extends Document {
     user: mongoose.Types.ObjectId;
+    displayName?: string;
     profileImage?: string; // Changed from profilePhoto to match frontend
     coverImage?: string; // Added for profile banner
     bio: string;
@@ -60,6 +61,8 @@ export interface ICreatorProfile extends Document {
         routingNumber?: string; // or swift code
         swiftCode?: string;
     };
+    onboardingStep: number;
+    onboardingCompleted: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -94,6 +97,7 @@ const creatorProfileSchema: Schema = new Schema({
         required: true,
         unique: true
     },
+    displayName: { type: String },
     profileImage: { type: String },
     coverImage: { type: String },
     bio: { type: String },
@@ -132,7 +136,9 @@ const creatorProfileSchema: Schema = new Schema({
         accountNumber: { type: String },
         routingNumber: { type: String },
         swiftCode: { type: String }
-    }
+    },
+    onboardingStep: { type: Number, default: 0 },
+    onboardingCompleted: { type: Boolean, default: false }
 
 }, {
     timestamps: true
