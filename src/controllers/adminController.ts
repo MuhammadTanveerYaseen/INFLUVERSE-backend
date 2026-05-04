@@ -114,6 +114,7 @@ export const verifyCreator = async (req: Request, res: Response) => {
         creatorUser.isVerified = true; // Assigned default verified tick upon approval
         creatorUser.rejectionReason = undefined;
         profile.verified = true; // Sync profile verification
+        (profile as any).approvedAt = new Date();
     } else if (status === 'rejected') {
         creatorUser.status = 'rejected';
         creatorUser.isVerified = false;

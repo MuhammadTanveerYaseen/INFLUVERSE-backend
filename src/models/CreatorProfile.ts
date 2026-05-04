@@ -63,6 +63,7 @@ export interface ICreatorProfile extends Document {
     };
     onboardingStep: number;
     onboardingCompleted: boolean;
+    approvedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -138,7 +139,9 @@ const creatorProfileSchema: Schema = new Schema({
         swiftCode: { type: String }
     },
     onboardingStep: { type: Number, default: 0 },
-    onboardingCompleted: { type: Boolean, default: false }
+    onboardingCompleted: { type: Boolean, default: false },
+    approvedAt: { type: Date }
+
 
 }, {
     timestamps: true

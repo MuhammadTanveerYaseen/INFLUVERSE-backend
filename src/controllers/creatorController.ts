@@ -233,7 +233,9 @@ export const getCreators = async (req: Request, res: Response) => {
             query.isFeatured = true;
         }
 
-        const creatorsList = await CreatorProfile.find(query).populate('user', 'username email status isVerified');
+        const creatorsList = await CreatorProfile.find(query)
+            .populate('user', 'username email status isVerified')
+            .sort({ approvedAt: -1, createdAt: -1 });
 
         // Filter out orphans and unapproved creators
         const validCreators = creatorsList.filter(c => 
